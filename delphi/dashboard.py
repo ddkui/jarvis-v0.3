@@ -25,6 +25,18 @@ def _summarize(e: Exception) -> str:
     return str(e).splitlines()[0]
 
 
+def _delete_best_effort(path: Path) -> None:
+    # On Windows, a file the WSGI server is still streaming out (e.g. via
+    # send_file) can still be open when this runs, and deleting an open file
+    # raises PermissionError there (POSIX allows it). This is just temp-file
+    # cleanup, not correctness-critical, so a failed delete is fine to ignore -
+    # the OS temp dir reclaims it eventually.
+    try:
+        path.unlink(missing_ok=True)
+    except PermissionError:
+        pass
+
+
 def create_app(config: DelphiConfig) -> Flask:
     app = Flask(__name__)
     vault_dir = config.vault_dir
@@ -128,12 +140,12 @@ def create_app(config: DelphiConfig) -> Flask:
         try:
             tts.synthesize(text, out_path, vault_dir, settings=preview_settings)
         except tts.VoiceUnavailable as e:
-            out_path.unlink(missing_ok=True)
+            _delete_best_effort(out_path)
             return jsonify({"ok": False, "error": str(e)}), 400
 
         @after_this_request
         def _cleanup(response):
-            out_path.unlink(missing_ok=True)
+            _delete_best_effort(out_path)
             return response
 
         return send_file(out_path, mimetype="audio/wav", download_name="preview.wav")

@@ -20,6 +20,7 @@ Safety:
 from __future__ import annotations
 
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -51,6 +52,12 @@ def _truncate(text: str) -> str:
         return text
     hidden = len(text) - _MAX_OUTPUT_CHARS
     return text[:_MAX_OUTPUT_CHARS] + f"\n... (truncated, {hidden} more chars)"
+
+
+def _shell_command(command: str) -> list[str]:
+    if platform.system() == "Windows":
+        return ["cmd", "/c", command]
+    return ["/bin/sh", "-c", command]
 
 
 def _run(args: list[str], cwd: Path) -> str:
@@ -85,7 +92,7 @@ def build_tools() -> list[Tool]:
         if not command:
             raise ValueError("missing required field: command")
         _log(f"run_shell: {command}")
-        return _run(["/bin/sh", "-c", command], cwd=root)
+        return _run(_shell_command(command), cwd=root)
 
     def read_file(args: dict) -> str:
         path = args.get("path")

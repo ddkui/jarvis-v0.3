@@ -136,6 +136,31 @@ def test_delete_voice_not_found_returns_false(client):
     assert res.get_json()["ok"] is False
 
 
+def test_delete_best_effort_ignores_permission_error(tmp_path):
+    # On Windows, a file still open elsewhere (e.g. mid-streaming via send_file)
+    # raises PermissionError on unlink rather than succeeding as it would on
+    # POSIX - cleanup should swallow that rather than crashing the request.
+    path = tmp_path / "locked.wav"
+    path.write_bytes(b"x")
+
+    def _raise_permission_error(self, missing_ok=False):
+        raise PermissionError("file in use")
+
+    import unittest.mock
+
+    with unittest.mock.patch.object(type(path), "unlink", _raise_permission_error):
+        dashboard_module._delete_best_effort(path)  # must not raise
+
+
+def test_delete_best_effort_removes_existing_file(tmp_path):
+    path = tmp_path / "cleanup.wav"
+    path.write_bytes(b"x")
+
+    dashboard_module._delete_best_effort(path)
+
+    assert not path.exists()
+
+
 def test_preview_returns_error_when_voice_disabled(client, monkeypatch):
     c, _ = client
     monkeypatch.delenv("DELPHI_ENABLE_VOICE", raising=False)

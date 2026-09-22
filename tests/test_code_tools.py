@@ -14,6 +14,16 @@ def test_disabled_by_default(monkeypatch):
     assert code_tools.build_tools() == []
 
 
+def test_shell_command_uses_cmd_on_windows(monkeypatch):
+    monkeypatch.setattr(code_tools.platform, "system", lambda: "Windows")
+    assert code_tools._shell_command("echo hi") == ["cmd", "/c", "echo hi"]
+
+
+def test_shell_command_uses_sh_on_posix(monkeypatch):
+    monkeypatch.setattr(code_tools.platform, "system", lambda: "Linux")
+    assert code_tools._shell_command("echo hi") == ["/bin/sh", "-c", "echo hi"]
+
+
 def test_disabled_when_env_var_not_exactly_one(monkeypatch):
     monkeypatch.setenv("DELPHI_ENABLE_CODE", "true")
     assert code_tools.build_tools() == []
