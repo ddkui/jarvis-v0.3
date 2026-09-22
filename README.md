@@ -269,6 +269,30 @@ Delphi bugs):
   `pip install -e .[voice]` should pull it in automatically; if you hit this
   on an existing install, `pip install torchcodec` fixes it directly.
 
+**Speeding it up with a GPU** — `delphi/tts.py` already auto-detects and uses
+CUDA if it's available (`torch.cuda.is_available()`), so no code change is
+needed. The default `pip install -e .[voice]` pulls in a CPU-only `torch`
+build though, which is the bottleneck: full synthesis on CPU can take a
+minute or more per response, versus a few seconds on an NVIDIA GPU. To switch
+an existing install over:
+
+1. Check your driver's max supported CUDA version: `nvidia-smi` (top-right of
+   the header).
+2. Get the matching install command from
+   [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/)
+   (choose Pip, your OS, and a CUDA version at or below what `nvidia-smi`
+   reported), then install `torch`/`torchaudio` from that CUDA index instead
+   of the default PyPI one, e.g.:
+   ```
+   pip uninstall -y torch torchaudio torchvision
+   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+   pip install --force-reinstall torchcodec
+   ```
+   (the `torchcodec` reinstall avoids an ABI mismatch against the new `torch`
+   build.)
+3. Verify: `python -c "import torch; print(torch.cuda.is_available())"`
+   should print `True`.
+
 ### Voice settings dashboard
 
 ```bash
