@@ -142,6 +142,18 @@ def create_app(config: JarvisConfig) -> Flask:
     def chat_page():
         return render_template("chat.html", model=config.model)
 
+    @app.get("/chat/history")
+    def chat_history():
+        agent = _get_agent()
+        turns = []
+        for m in agent.messages:
+            role, content = m.get("role"), m.get("content")
+            if role == "user" and isinstance(content, str):
+                turns.append({"role": "you", "text": content})
+            elif role == "assistant" and isinstance(content, str) and content:
+                turns.append({"role": "jarvis", "text": content})
+        return jsonify({"ok": True, "turns": turns})
+
     @app.post("/chat/send")
     def chat_send():
         message = (request.form.get("message") or "").strip()
@@ -152,6 +164,7 @@ def create_app(config: JarvisConfig) -> Flask:
         try:
             reply = agent.send(message)
         except AgentAbort as e:
+            runtime.save_conversation(config, agent)
             return jsonify({"ok": False, "error": f"Stopped: {e}"}), 200
         except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
             return jsonify(
@@ -165,11 +178,15 @@ def create_app(config: JarvisConfig) -> Flask:
             return jsonify(
                 {"ok": False, "error": f"Couldn't reach model '{config.model}': {_summarize(e)}"}
             ), 200
+        runtime.save_conversation(config, agent)
         return jsonify({"ok": True, "reply": reply})
 
     @app.post("/chat/reset")
     def chat_reset():
+        from jarvis import conversation
+
         state["agent"] = None
+        conversation.clear(vault_dir)
         return jsonify({"ok": True})
 
     return app

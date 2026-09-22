@@ -33,6 +33,7 @@ class _FakeAgent:
         self._reply = reply
         self._raises = raises
         self.sent = []
+        self.messages = []
 
     def send(self, message):
         self.sent.append(message)
@@ -182,6 +183,39 @@ def test_chat_page_renders(client):
     res = c.get("/chat")
     assert res.status_code == 200
     assert b"Jarvis" in res.data
+
+
+def test_chat_history_empty_for_fresh_conversation(client):
+    c, _ = client
+    res = c.get("/chat/history")
+    assert res.status_code == 200
+    assert res.get_json() == {"ok": True, "turns": []}
+
+
+def test_chat_history_reflects_resumed_conversation(client, monkeypatch):
+    c, vault_dir = client
+    from jarvis import conversation
+
+    conversation.save_messages(
+        vault_dir,
+        [
+            {"role": "user", "content": "hi"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "remember", "arguments": "{}"}}],
+            },
+            {"role": "tool", "tool_call_id": "c1", "content": "Remembered: something"},
+            {"role": "assistant", "content": "Got it."},
+        ],
+    )
+
+    res = c.get("/chat/history")
+
+    assert res.get_json() == {
+        "ok": True,
+        "turns": [{"role": "you", "text": "hi"}, {"role": "jarvis", "text": "Got it."}],
+    }
 
 
 def test_chat_send_rejects_empty_message(client):

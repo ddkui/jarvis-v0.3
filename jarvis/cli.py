@@ -35,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     chat_parser.add_argument(
         "--speak", action="store_true", help="Also speak each response aloud (see README 'Voice output')."
     )
+    chat_parser.add_argument(
+        "--new", action="store_true", help="Start a fresh conversation instead of resuming the last one."
+    )
 
     note_parser = subparsers.add_parser("note", help="Manage notes.")
     note_sub = note_parser.add_subparsers(dest="note_command", required=True)
@@ -69,6 +72,14 @@ def build_parser() -> argparse.ArgumentParser:
     remind_done.add_argument("reminder_id")
 
     subparsers.add_parser("digest", help="Print the daily digest.")
+
+    memory_parser = subparsers.add_parser("memory", help="See and manage what Jarvis remembers about you.")
+    memory_sub = memory_parser.add_subparsers(dest="memory_command", required=True)
+
+    memory_sub.add_parser("list", help="List remembered facts.")
+
+    memory_forget = memory_sub.add_parser("forget", help="Remove a remembered fact.")
+    memory_forget.add_argument("fact_id")
 
     auth_parser = subparsers.add_parser("auth", help="Manage provider API keys in the OS keychain.")
     auth_sub = auth_parser.add_subparsers(dest="auth_command", required=True)
@@ -108,13 +119,14 @@ def _parse_tags(raw: str | None) -> list[str]:
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
-    from jarvis.agent.core import JarvisAgent
-
     config = load_config()
     _vault, _store, _reminders, tools = runtime.build_agent_stack(config)
-
     computer_use_active = any(tool.name.startswith("computer_") for tool in tools)
-    max_tool_iterations = runtime.max_tool_iterations_for(tools)
+
+    if args.new:
+        from jarvis import conversation
+
+        conversation.clear(config.vault_dir)
 
     speak_enabled = False
     if args.speak:
@@ -125,9 +137,11 @@ def cmd_chat(args: argparse.Namespace) -> int:
         except tts.VoiceUnavailable as e:
             console.print(f"[yellow]Voice unavailable:[/yellow] {escape(str(e))} Continuing in text-only mode.")
 
+    agent = runtime.build_agent(config)
     try:
-        agent = JarvisAgent(model=config.model, tools=tools, max_tool_iterations=max_tool_iterations)
         console.print("[bold cyan]Jarvis[/bold cyan] is ready. Type 'exit' or 'quit' to leave.")
+        if agent.messages:
+            console.print("[dim](resumed your last conversation — use --new to start fresh)[/dim]")
         if computer_use_active:
             console.print(
                 "[yellow]Computer-use tools are active[/yellow]: Jarvis can see the screen "
@@ -145,7 +159,9 @@ def cmd_chat(args: argparse.Namespace) -> int:
             if not user_input.strip():
                 continue
             _run_turn(agent, user_input, speak=speak_enabled)
+            runtime.save_conversation(config, agent)
     except AgentAbort as e:
+        runtime.save_conversation(config, agent)
         console.print(f"\n[bold red]Stopped:[/bold red] {e}")
         return 1
     except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
@@ -376,6 +392,35 @@ def cmd_digest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_memory_list(args: argparse.Namespace) -> int:
+    from jarvis.memory import facts
+
+    config = load_config()
+    items = facts.list_facts(config.vault_dir)
+    if not items:
+        console.print("Nothing remembered yet.")
+        return 0
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ID")
+    table.add_column("Fact")
+    table.add_column("Since")
+    for fact in items:
+        table.add_row(fact.id, escape(fact.text), fact.created_at)
+    console.print(table)
+    return 0
+
+
+def cmd_memory_forget(args: argparse.Namespace) -> int:
+    from jarvis.memory import facts
+
+    config = load_config()
+    if facts.remove_fact(config.vault_dir, args.fact_id):
+        console.print(f"Forgot {escape(args.fact_id)}.")
+        return 0
+    console.print(f"No remembered fact with id {escape(args.fact_id)}.")
+    return 1
+
+
 def cmd_dashboard(args: argparse.Namespace) -> int:
     try:
         from jarvis.dashboard import run_dashboard
@@ -463,6 +508,11 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_remind_done(args)
     if args.command == "digest":
         return cmd_digest(args)
+    if args.command == "memory":
+        if args.memory_command == "list":
+            return cmd_memory_list(args)
+        if args.memory_command == "forget":
+            return cmd_memory_forget(args)
     if args.command == "dashboard":
         return cmd_dashboard(args)
     if args.command == "tray":

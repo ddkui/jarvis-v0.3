@@ -1,12 +1,13 @@
 from jarvis.cli import (
+    _run_turn,
+    _summarize,
+    build_parser,
     cmd_auth_delete,
     cmd_auth_list,
     cmd_auth_set,
     cmd_note_add,
     cmd_note_delete,
     console,
-    _summarize,
-    build_parser,
 )
 
 
@@ -14,11 +15,17 @@ def test_chat_command():
     args = build_parser().parse_args(["chat"])
     assert args.command == "chat"
     assert args.speak is False
+    assert args.new is False
 
 
 def test_chat_command_with_speak_flag():
     args = build_parser().parse_args(["chat", "--speak"])
     assert args.speak is True
+
+
+def test_chat_command_with_new_flag():
+    args = build_parser().parse_args(["chat", "--new"])
+    assert args.new is True
 
 
 def test_note_add_command():
@@ -121,6 +128,43 @@ def test_remind_done_command():
 def test_digest_command():
     args = build_parser().parse_args(["digest"])
     assert args.command == "digest"
+
+
+def test_memory_list_command():
+    args = build_parser().parse_args(["memory", "list"])
+    assert args.command == "memory"
+    assert args.memory_command == "list"
+
+
+def test_memory_forget_command():
+    args = build_parser().parse_args(["memory", "forget", "abc123"])
+    assert args.command == "memory"
+    assert args.memory_command == "forget"
+    assert args.fact_id == "abc123"
+
+
+def test_cmd_memory_list_and_forget_end_to_end(monkeypatch, tmp_path, capsys):
+    from jarvis.cli import cmd_memory_forget, cmd_memory_list
+    from jarvis.memory import facts
+
+    monkeypatch.setenv("JARVIS_VAULT_DIR", str(tmp_path))
+    monkeypatch.delenv("JARVIS_DB_PATH", raising=False)
+
+    from jarvis.config import load_config
+
+    config = load_config()
+    fact = facts.add_fact(config.vault_dir, "The user's name is Dan.")
+
+    assert cmd_memory_list(build_parser().parse_args(["memory", "list"])) == 0
+    output = capsys.readouterr().out
+    assert "Dan" in output
+
+    assert cmd_memory_forget(build_parser().parse_args(["memory", "forget", fact.id])) == 0
+    assert cmd_memory_forget(build_parser().parse_args(["memory", "forget", "nope"])) == 1
+
+    assert cmd_memory_list(build_parser().parse_args(["memory", "list"])) == 0
+    output = capsys.readouterr().out
+    assert "Nothing remembered yet." in output
 
 
 def test_dashboard_command_defaults():
@@ -227,3 +271,52 @@ def test_cmd_auth_delete_reports_success_and_failure(monkeypatch):
 
     assert cmd_auth_delete(build_parser().parse_args(["auth", "delete", "ANTHROPIC_API_KEY"])) == 0
     assert cmd_auth_delete(build_parser().parse_args(["auth", "delete", "GEMINI_API_KEY"])) == 1
+
+
+def test_conversation_persists_across_agent_rebuilds(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from jarvis import runtime
+    from jarvis.config import JarvisConfig
+
+    config = JarvisConfig(
+        model="anthropic/claude-opus-5",
+        vault_dir=tmp_path,
+        db_path=tmp_path / ".jarvis" / "memory.db",
+        reminders_db_path=tmp_path / ".jarvis" / "reminders.db",
+    )
+
+    def fake_completion(**kwargs):
+        delta = SimpleNamespace(content="Hi there!", tool_calls=None)
+        return iter([SimpleNamespace(choices=[SimpleNamespace(delta=delta)])])
+
+    monkeypatch.setattr("jarvis.agent.core.litellm.completion", fake_completion)
+
+    agent = runtime.build_agent(config)
+    _run_turn(agent, "hello jarvis")
+    runtime.save_conversation(config, agent)
+
+    resumed_agent = runtime.build_agent(config)
+    assert resumed_agent.messages == agent.messages
+    assert resumed_agent.messages[0] == {"role": "user", "content": "hello jarvis"}
+    assert resumed_agent.messages[1] == {"role": "assistant", "content": "Hi there!"}
+
+
+def test_new_flag_clears_persisted_conversation(tmp_path):
+    from jarvis import conversation, runtime
+    from jarvis.config import JarvisConfig
+
+    config = JarvisConfig(
+        model="anthropic/claude-opus-5",
+        vault_dir=tmp_path,
+        db_path=tmp_path / ".jarvis" / "memory.db",
+        reminders_db_path=tmp_path / ".jarvis" / "reminders.db",
+    )
+    conversation.save_messages(config.vault_dir, [{"role": "user", "content": "old conversation"}])
+
+    args = build_parser().parse_args(["chat", "--new"])
+    assert args.new is True
+    conversation.clear(config.vault_dir)  # what cmd_chat does when args.new is set
+
+    fresh_agent = runtime.build_agent(config)
+    assert fresh_agent.messages == []

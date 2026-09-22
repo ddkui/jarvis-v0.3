@@ -29,9 +29,14 @@ class JarvisAgent:
     """
 
     def __init__(
-        self, model: str, tools: list[Tool], max_tool_iterations: int = _MAX_TOOL_ITERATIONS
+        self,
+        model: str,
+        tools: list[Tool],
+        max_tool_iterations: int = _MAX_TOOL_ITERATIONS,
+        system_prompt: str = SYSTEM_PROMPT,
     ) -> None:
         self.model = model
+        self.system_prompt = system_prompt
         self._max_tool_iterations = max_tool_iterations
         self._tool_schemas = [
             {
@@ -61,7 +66,7 @@ class JarvisAgent:
         tool calls across many chunks."""
         stream = litellm.completion(
             model=self.model,
-            messages=[{"role": "system", "content": SYSTEM_PROMPT}] + self.messages,
+            messages=[{"role": "system", "content": self.system_prompt}] + self.messages,
             tools=self._tool_schemas or None,
             stream=True,
         )

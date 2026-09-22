@@ -63,6 +63,30 @@ Type `exit` or `quit`, or press Ctrl-D, to leave. Add `--speak` to also hear
 responses aloud (see "Voice output" below — off by default, extra setup
 required).
 
+The conversation picks up where you left off across restarts (stored at
+`<vault_dir>/.jarvis/conversation.json`) — it's one ongoing conversation, not
+a history of separate sessions. Run `jarvis chat --new` to clear it and start
+fresh instead.
+
+### Memory
+
+Separately from the note vault, Jarvis keeps a short list of durable facts
+about you — your name, preferences, ongoing context — that it remembers
+silently across *every* conversation, not just the current one. It decides
+on its own when something's worth remembering (via a `remember` tool) rather
+than asking each time, the same way it already decides when to offer to save
+a note; unlike notes, these facts don't need to be searched for — they're
+folded straight into its instructions on every turn. See what it's
+remembered, or make it forget something:
+
+```bash
+jarvis memory list
+jarvis memory forget <fact_id>
+```
+
+Stored at `<vault_dir>/.jarvis/memory_facts.json`, capped at 50 facts (oldest
+dropped first) so it can't grow the prompt without bound.
+
 ### Storing API keys securely
 
 ```bash
@@ -206,10 +230,12 @@ is set, so you can configure everything ahead of time — the settings just
 won't audibly do anything until voice output is enabled.
 
 `jarvis dashboard` also serves a web chat at `/chat` — a browser alternative
-to `jarvis chat` that stays open in a tab instead of a terminal. It holds one
-conversation (no multi-tab sessions, no history across reloads — click "New
-conversation" to reset it) and doesn't stream token-by-token like the
-terminal chat does; you'll see a "Thinking..." state while it generates.
+to `jarvis chat` that stays open in a tab instead of a terminal, backed by
+the same persisted conversation (reload the page, or restart the server, and
+your history reloads with it — click "New conversation" to actually clear
+it). It's one conversation with no multi-tab sessions, and it doesn't stream
+token-by-token like the terminal chat does; you'll see a "Thinking..." state
+while it generates.
 
 ## Running in the background
 

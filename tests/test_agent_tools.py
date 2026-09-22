@@ -4,7 +4,7 @@ import pytest
 
 from jarvis.memory.store import MemoryStore
 from jarvis.vault import Vault
-from jarvis.tools import notes_tools, reminder_tools, calendar_tools, email_tools
+from jarvis.tools import calendar_tools, email_tools, memory_tools, notes_tools, reminder_tools
 
 
 def _tools_by_name(tools):
@@ -141,3 +141,41 @@ def test_email_tools_raises_when_configured(monkeypatch):
     monkeypatch.setenv("GOOGLE_GMAIL_CREDENTIALS", "some-path.json")
     with pytest.raises(NotImplementedError):
         email_tools.build_tools()
+
+
+def test_remember_then_list_memory(tmp_path: Path):
+    tools = _tools_by_name(memory_tools.build_tools(tmp_path))
+
+    remember_result = tools["remember"].handler({"text": "The user's name is Dan."})
+    assert "Remembered" in remember_result
+
+    listing = tools["list_memory"].handler({})
+    assert "The user's name is Dan." in listing
+
+
+def test_list_memory_empty(tmp_path: Path):
+    tools = _tools_by_name(memory_tools.build_tools(tmp_path))
+    assert tools["list_memory"].handler({}) == "Nothing remembered yet."
+
+
+def test_remember_then_forget(tmp_path: Path):
+    tools = _tools_by_name(memory_tools.build_tools(tmp_path))
+
+    remember_result = tools["remember"].handler({"text": "likes dark mode"})
+    fact_id = remember_result.split("(")[1].split(")")[0]
+
+    forget_result = tools["forget"].handler({"fact_id": fact_id})
+    assert "Forgot memory" in forget_result
+    assert tools["list_memory"].handler({}) == "Nothing remembered yet."
+
+
+def test_forget_missing_id(tmp_path: Path):
+    tools = _tools_by_name(memory_tools.build_tools(tmp_path))
+    result = tools["forget"].handler({"fact_id": "does-not-exist"})
+    assert "no memory found" in result.lower()
+
+
+def test_remember_missing_text_raises(tmp_path: Path):
+    tools = _tools_by_name(memory_tools.build_tools(tmp_path))
+    with pytest.raises(ValueError):
+        tools["remember"].handler({})

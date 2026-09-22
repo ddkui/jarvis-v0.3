@@ -93,6 +93,21 @@
       log.scrollTop = log.scrollHeight;
     }
 
+    async function loadHistory() {
+      try {
+        const res = await fetch('/chat/history');
+        const data = await res.json();
+        if (data.ok) {
+          for (const turn of data.turns) {
+            addMessage(turn.role, turn.text);
+          }
+        }
+      } catch (err) {
+        // History is a convenience, not critical - a fresh chat still works fine.
+      }
+    }
+    loadHistory();
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const message = input.value.trim();
