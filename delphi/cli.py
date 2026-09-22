@@ -182,7 +182,28 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 break
             if not user_input.strip():
                 continue
-            _run_turn(agent, user_input, speak=speak_enabled)
+            try:
+                _run_turn(agent, user_input, speak=speak_enabled)
+            except (
+                AgentAbort,
+                litellm.exceptions.AuthenticationError,
+                litellm.exceptions.APIConnectionError,
+                litellm.exceptions.NotFoundError,
+                litellm.exceptions.BadRequestError,
+            ):
+                # Handled by the outer except clauses below, which end the session -
+                # these usually mean persistent misconfiguration (bad key, bad model
+                # name) or a deliberate safety stop, not something retrying will fix.
+                raise
+            except Exception as e:
+                # Anything else (rate limits, the provider being briefly overloaded,
+                # a mid-stream hiccup) is usually transient - don't crash the whole
+                # session over it, just report it and let the user try again.
+                console.print(
+                    f"[bold red]Delphi hit a problem reaching the model[/bold red]: {escape(_summarize(e))}\n"
+                    "This is often temporary (the provider may be overloaded or had a "
+                    "blip) — try again."
+                )
             runtime.save_conversation(config, agent)
     except AgentAbort as e:
         runtime.save_conversation(config, agent)

@@ -5,6 +5,7 @@ from delphi.cli import (
     cmd_auth_delete,
     cmd_auth_list,
     cmd_auth_set,
+    cmd_chat,
     cmd_note_add,
     cmd_note_delete,
     console,
@@ -347,3 +348,46 @@ def test_new_flag_clears_persisted_conversation(tmp_path):
 
     fresh_agent = runtime.build_agent(config)
     assert fresh_agent.messages == []
+
+
+def test_cmd_chat_survives_a_transient_model_error_and_keeps_chatting(monkeypatch, tmp_path, capsys):
+    # Regression: a mid-stream provider hiccup (e.g. litellm.MidStreamFallbackError
+    # from a 503 "model overloaded") used to propagate all the way out of cmd_chat
+    # as a raw, unhandled traceback that killed the whole interactive session.
+    # It should be reported and the session should keep going instead.
+    from delphi.config import DelphiConfig
+
+    config = DelphiConfig(
+        model="anthropic/claude-opus-5",
+        vault_dir=tmp_path,
+        db_path=tmp_path / ".delphi" / "memory.db",
+        reminders_db_path=tmp_path / ".delphi" / "reminders.db",
+    )
+    monkeypatch.setattr("delphi.cli.load_config", lambda: config)
+    monkeypatch.setattr("delphi.autoupdate.check_once_and_restart_if_updated", lambda: None)
+
+    class _FlakyAgent:
+        def __init__(self):
+            self.messages = []
+            self.calls = 0
+
+        def send(self, message, on_delta=None, on_tool_call=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("simulated transient provider overload")
+            return "all good now"
+
+    fake_agent = _FlakyAgent()
+    monkeypatch.setattr("delphi.runtime.build_agent", lambda config: fake_agent)
+    monkeypatch.setattr("delphi.runtime.save_conversation", lambda config, agent: None)
+
+    inputs = iter(["hey", "hey again", "exit"])
+    monkeypatch.setattr(console, "input", lambda *a, **k: next(inputs))
+
+    result = cmd_chat(build_parser().parse_args(["chat"]))
+
+    assert result == 0
+    assert fake_agent.calls == 2
+    out = capsys.readouterr().out
+    assert "hit a problem reaching the model" in out
+    assert "all good now" in out
