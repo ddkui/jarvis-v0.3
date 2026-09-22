@@ -25,6 +25,11 @@ computer-use = [
 voice = [
     "chatterbox-tts>=0.1.0",
     "flask>=3.0",
+    # chatterbox-tts pulls in a recent torchaudio, whose torchaudio.save() now
+    # requires this separate package for audio encoding - without it, synthesis
+    # completes but saving the result fails with "TorchCodec is required for
+    # save_with_torchcodec".
+    "torchcodec",
 ]
 tray = [
     "pystray>=0.19",

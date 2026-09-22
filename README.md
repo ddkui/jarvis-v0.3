@@ -253,6 +253,22 @@ lighter-weight fallback if you'd rather avoid the torch dependency, at the
 cost of sounding more synthetic — swap it in via a different `delphi/tts.py`
 backend if that trade makes more sense for your machine.
 
+**Known dependency gaps on a fresh install** — Chatterbox's own pinned
+dependencies can lag behind what pip actually resolves for you, especially on
+a recently-updated machine. Two seen in practice (both one-time fixes, not
+Delphi bugs):
+
+- `ModuleNotFoundError: No module named 'pkg_resources'` (or the model
+  loading fails with a cryptic `'NoneType' object is not callable`) — a
+  dependency (`perth`, Chatterbox's watermarker) still uses the old
+  `pkg_resources` API, which very new `setuptools` versions have dropped.
+  Fix: `pip install "setuptools<81"`.
+- `TorchCodec is required for save_with_torchcodec` — recent `torchaudio`
+  versions need the separate `torchcodec` package to write audio files.
+  This is now in the `voice` extra's dependencies, so a fresh
+  `pip install -e .[voice]` should pull it in automatically; if you hit this
+  on an existing install, `pip install torchcodec` fixes it directly.
+
 ### Voice settings dashboard
 
 ```bash
