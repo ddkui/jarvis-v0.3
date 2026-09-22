@@ -190,6 +190,8 @@ def create_app(config: DelphiConfig) -> Flask:
             return jsonify(
                 {"ok": False, "error": f"Couldn't reach model '{config.model}': {_summarize(e)}"}
             ), 200
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"That turn hit a problem: {_summarize(e)}"}), 200
         runtime.save_conversation(config, agent)
         return jsonify({"ok": True, "reply": reply})
 

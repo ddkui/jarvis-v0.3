@@ -322,3 +322,16 @@ def test_chat_send_handles_authentication_error(client, monkeypatch):
     data = res.get_json()
     assert data["ok"] is False
     assert "authenticate" in data["error"].lower()
+
+
+def test_chat_send_handles_unexpected_errors_gracefully(client, monkeypatch):
+    c, _ = client
+    fake_agent = _FakeAgent(raises=RuntimeError("quota exceeded"))
+    monkeypatch.setattr(runtime, "build_agent", lambda config: fake_agent)
+
+    res = c.post("/chat/send", data={"message": "hi"})
+
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is False
+    assert "hit a problem" in data["error"].lower()
