@@ -12,6 +12,12 @@ from jarvis.tools import calendar_tools, email_tools, notes_tools, reminder_tool
 from jarvis.vault import Vault
 
 
+def _summarize(e: Exception) -> str:
+    # litellm embeds a full traceback in some exceptions' message text; show only
+    # the first line so CLI error output stays readable.
+    return str(e).splitlines()[0]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="jarvis", description="Your personal second brain.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -93,16 +99,18 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 continue
             response = agent.send(user_input)
             print(f"jarvis> {response}")
-    except litellm.exceptions.AuthenticationError:
+    except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
         print(
-            f"Jarvis couldn't authenticate with the API for model '{config.model}'. "
-            "Copy .env.example to .env and set the API key for that provider "
-            "(e.g. ANTHROPIC_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY)."
+            f"Jarvis couldn't authenticate with the API for model '{config.model}': "
+            f"{_summarize(e)}\n"
+            "If you haven't set an API key for this provider yet, copy .env.example to "
+            ".env and set it (e.g. ANTHROPIC_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, "
+            "GROQ_API_KEY) — otherwise this may be a network issue reaching the provider."
         )
         return 1
     except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
         print(
-            f"Jarvis couldn't reach model '{config.model}': {e}\n"
+            f"Jarvis couldn't reach model '{config.model}': {_summarize(e)}\n"
             "Check JARVIS_MODEL uses a valid litellm provider prefix, e.g. "
             "anthropic/claude-opus-5, gemini/gemini-2.5-flash, deepseek/deepseek-chat, "
             "groq/llama-3.3-70b-versatile, ollama/llama3.1."

@@ -1,4 +1,4 @@
-from jarvis.cli import build_parser
+from jarvis.cli import _summarize, build_parser
 
 
 def test_chat_command():
@@ -83,3 +83,12 @@ def test_no_command_raises():
 
     with pytest.raises(SystemExit):
         build_parser().parse_args([])
+
+
+def test_summarize_keeps_only_first_line():
+    error = Exception("short reason\nTraceback (most recent call last):\n  File ...")
+    assert _summarize(error) == "short reason"
+
+
+def test_summarize_single_line_message_unchanged():
+    assert _summarize(Exception("plain message")) == "plain message"

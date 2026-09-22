@@ -17,7 +17,9 @@ def _load_dotenv(path: Path) -> None:
         key, _, value = stripped.partition("=")
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key:
+        # Skip blank placeholders (e.g. unset "GEMINI_API_KEY=") - setting them to ""
+        # makes some SDKs treat the key as present-but-empty instead of unset.
+        if key and value:
             os.environ.setdefault(key, value)
 
 
