@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
+from typing import Callable
 
 import litellm
 
@@ -51,8 +53,58 @@ class JarvisAgent:
             raise ValueError(f"unknown tool: {name}")
         return handler(arguments)
 
-    def send(self, user_message: str) -> str:
+    def _stream_completion(self, on_delta: Callable[[str], None] | None):
+        """Run one streamed completion call and return an object shaped like a
+        non-streaming response's `.message` (`.content`, `.tool_calls`), by
+        accumulating chunks as they arrive. Tool-call argument fragments are
+        concatenated by their stream `index`, matching how providers split large
+        tool calls across many chunks."""
+        stream = litellm.completion(
+            model=self.model,
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}] + self.messages,
+            tools=self._tool_schemas or None,
+            stream=True,
+        )
+
+        content_parts: list[str] = []
+        tool_call_slots: dict[int, dict] = {}
+
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                content_parts.append(delta.content)
+                if on_delta is not None:
+                    on_delta(delta.content)
+            for tc in delta.tool_calls or []:
+                slot = tool_call_slots.setdefault(tc.index, {"id": None, "name": None, "arguments": ""})
+                if tc.id:
+                    slot["id"] = tc.id
+                if tc.function and tc.function.name:
+                    slot["name"] = tc.function.name
+                if tc.function and tc.function.arguments:
+                    slot["arguments"] += tc.function.arguments
+
+        tool_calls = [
+            SimpleNamespace(
+                id=slot["id"],
+                function=SimpleNamespace(name=slot["name"], arguments=slot["arguments"]),
+            )
+            for _, slot in sorted(tool_call_slots.items())
+        ]
+        return SimpleNamespace(content="".join(content_parts) or None, tool_calls=tool_calls or None)
+
+    def send(
+        self,
+        user_message: str,
+        on_delta: Callable[[str], None] | None = None,
+        on_tool_call: Callable[[str], None] | None = None,
+    ) -> str:
         """Send a user message and run the tool-use loop to completion.
+
+        Streams the model's text as it arrives; pass on_delta to receive each text
+        fragment as it's generated (e.g. to print it live), and on_tool_call to be
+        notified of each tool name just before it runs. Both are optional — omit
+        them and send() just returns the final text once everything's done.
 
         Returns the assistant's final response text. Raises
         litellm.exceptions.AuthenticationError if the active provider's API key is
@@ -65,13 +117,7 @@ class JarvisAgent:
         self.messages.append({"role": "user", "content": user_message})
 
         for _ in range(self._max_tool_iterations):
-            response = litellm.completion(
-                model=self.model,
-                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + self.messages,
-                tools=self._tool_schemas or None,
-            )
-
-            message = response.choices[0].message
+            message = self._stream_completion(on_delta)
             tool_calls = message.tool_calls or []
 
             assistant_message: dict = {"role": "assistant", "content": message.content or ""}
@@ -94,6 +140,8 @@ class JarvisAgent:
 
             image_urls = []
             for call in tool_calls:
+                if on_tool_call is not None:
+                    on_tool_call(call.function.name)
                 try:
                     arguments = json.loads(call.function.arguments or "{}")
                     result_text = self._execute(call.function.name, arguments)

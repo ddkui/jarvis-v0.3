@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from jarvis import secrets
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -33,6 +35,7 @@ class JarvisConfig:
 
 def load_config() -> JarvisConfig:
     _load_dotenv(REPO_ROOT / ".env")
+    secrets.apply_to_environ(secrets.KNOWN_KEYS)
 
     model = os.environ.get("JARVIS_MODEL", "anthropic/claude-opus-5")
     vault_dir = Path(os.environ.get("JARVIS_VAULT_DIR", "./vault"))

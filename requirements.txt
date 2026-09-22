@@ -1,5 +1,7 @@
 litellm>=1.100.0
 pyyaml>=6.0
+rich>=13.0
+keyring>=25.0
 pytest>=8.0
 
 # Optional: only needed for computer-use tools (see README.md "Computer use").

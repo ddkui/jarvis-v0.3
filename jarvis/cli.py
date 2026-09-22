@@ -4,7 +4,14 @@ import argparse
 import sys
 
 import litellm
+from rich.console import Console
+from rich.live import Live
+from rich.markdown import Markdown
+from rich.markup import escape
+from rich.spinner import Spinner
+from rich.table import Table
 
+from jarvis import secrets
 from jarvis.config import load_config
 from jarvis.memory.store import MemoryStore
 from jarvis.models import AgentAbort
@@ -13,6 +20,8 @@ from jarvis.tools import calendar_tools, computer_tools, email_tools, notes_tool
 from jarvis.vault import Vault
 
 _COMPUTER_USE_MAX_TOOL_ITERATIONS = 25
+
+console = Console()
 
 
 def _summarize(e: Exception) -> str:
@@ -58,6 +67,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("digest", help="Print the daily digest.")
 
+    auth_parser = subparsers.add_parser("auth", help="Manage provider API keys in the OS keychain.")
+    auth_sub = auth_parser.add_subparsers(dest="auth_command", required=True)
+
+    auth_set = auth_sub.add_parser("set", help="Store a provider API key in the OS keychain.")
+    auth_set.add_argument("name", help="Env var name, e.g. ANTHROPIC_API_KEY.")
+
+    auth_sub.add_parser("list", help="Show which known keys have a stored value.")
+
+    auth_delete = auth_sub.add_parser("delete", help="Remove a stored key from the OS keychain.")
+    auth_delete.add_argument("name")
+
     return parser
 
 
@@ -93,40 +113,39 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
     try:
         agent = JarvisAgent(model=config.model, tools=tools, max_tool_iterations=max_tool_iterations)
-        print("Jarvis is ready. Type 'exit' or 'quit' to leave.")
+        console.print("[bold cyan]Jarvis[/bold cyan] is ready. Type 'exit' or 'quit' to leave.")
         if computer_use_active:
-            print(
-                "Computer-use tools are active: Jarvis can see the screen and control "
-                "the mouse/keyboard on this machine. Drag the mouse to any screen "
-                "corner at any time to hard-stop it."
+            console.print(
+                "[yellow]Computer-use tools are active[/yellow]: Jarvis can see the screen "
+                "and control the mouse/keyboard on this machine. Drag the mouse to any "
+                "screen corner at any time to hard-stop it."
             )
         while True:
             try:
-                user_input = input("you> ")
+                user_input = console.input("[bold green]you>[/bold green] ")
             except EOFError:
-                print()
+                console.print()
                 break
             if user_input.strip().lower() in ("exit", "quit"):
                 break
             if not user_input.strip():
                 continue
-            response = agent.send(user_input)
-            print(f"jarvis> {response}")
+            _run_turn(agent, user_input)
     except AgentAbort as e:
-        print(f"\nStopped: {e}")
+        console.print(f"\n[bold red]Stopped:[/bold red] {e}")
         return 1
     except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
-        print(
-            f"Jarvis couldn't authenticate with the API for model '{config.model}': "
-            f"{_summarize(e)}\n"
-            "If you haven't set an API key for this provider yet, copy .env.example to "
-            ".env and set it (e.g. ANTHROPIC_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, "
-            "GROQ_API_KEY) — otherwise this may be a network issue reaching the provider."
+        console.print(
+            f"[bold red]Jarvis couldn't authenticate[/bold red] with the API for model "
+            f"'{config.model}': {_summarize(e)}\n"
+            "If you haven't set an API key for this provider yet, run "
+            f"[cyan]jarvis auth set {_key_env_var_hint(config.model)}[/cyan] or copy "
+            ".env.example to .env — otherwise this may be a network issue reaching the provider."
         )
         return 1
     except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
-        print(
-            f"Jarvis couldn't reach model '{config.model}': {_summarize(e)}\n"
+        console.print(
+            f"[bold red]Jarvis couldn't reach model[/bold red] '{config.model}': {_summarize(e)}\n"
             "Check JARVIS_MODEL uses a valid litellm provider prefix, e.g. "
             "anthropic/claude-opus-5, gemini/gemini-2.5-flash, deepseek/deepseek-chat, "
             "groq/llama-3.3-70b-versatile, ollama/llama3.1."
@@ -134,6 +153,82 @@ def cmd_chat(args: argparse.Namespace) -> int:
         return 1
 
     return 0
+
+
+def _key_env_var_hint(model: str) -> str:
+    provider = model.split("/", 1)[0] if "/" in model else "anthropic"
+    return {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "groq": "GROQ_API_KEY",
+    }.get(provider, "ANTHROPIC_API_KEY")
+
+
+def _run_turn(agent, user_input: str) -> str:
+    """Send one message, streaming the response live into the terminal via rich."""
+    state = {"live": None, "buffer": []}
+
+    def start_live():
+        state["live"] = Live(
+            Spinner("dots", text="Jarvis is thinking..."),
+            console=console,
+            refresh_per_second=12,
+            transient=True,
+        )
+        state["live"].start()
+
+    def on_delta(text: str) -> None:
+        state["buffer"].append(text)
+        state["live"].update(Markdown("".join(state["buffer"])))
+
+    def on_tool_call(name: str) -> None:
+        state["live"].stop()
+        console.print(f"[dim]→ using {name}[/dim]")
+        start_live()
+
+    start_live()
+    try:
+        response = agent.send(user_input, on_delta=on_delta, on_tool_call=on_tool_call)
+    finally:
+        state["live"].stop()
+
+    console.print("[bold cyan]jarvis>[/bold cyan]")
+    console.print(Markdown(response) if response else "[dim](no response)[/dim]")
+    return response
+
+
+def cmd_auth_set(args: argparse.Namespace) -> int:
+    value = console.input(f"Enter value for [bold]{escape(args.name)}[/bold] (hidden): ", password=True)
+    if not value:
+        console.print("No value entered; nothing stored.")
+        return 1
+    try:
+        secrets.set_secret(args.name, value)
+    except Exception as e:
+        console.print(f"[bold red]Couldn't store {args.name} in the OS keychain:[/bold red] {e}")
+        return 1
+    console.print(f"Stored {args.name} in the OS keychain.")
+    return 0
+
+
+def cmd_auth_list(args: argparse.Namespace) -> int:
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Key")
+    table.add_column("Stored in keychain")
+    for name in secrets.KNOWN_KEYS:
+        stored = "yes" if secrets.get_secret(name) else "no"
+        table.add_row(name, stored)
+    console.print(table)
+    return 0
+
+
+def cmd_auth_delete(args: argparse.Namespace) -> int:
+    if secrets.delete_secret(args.name):
+        console.print(f"Removed {args.name} from the OS keychain.")
+        return 0
+    console.print(f"No stored value for {args.name}.")
+    return 1
 
 
 def cmd_note_add(args: argparse.Namespace) -> int:
@@ -151,10 +246,15 @@ def cmd_note_list(args: argparse.Namespace) -> int:
     vault = Vault(config.vault_dir)
     notes = vault.list_notes()
     if not notes:
-        print("No notes yet.")
+        console.print("No notes yet.")
         return 0
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ID")
+    table.add_column("Title")
+    table.add_column("Updated")
     for note in notes:
-        print(f"{note.id}  {note.title}")
+        table.add_row(note.id, escape(note.title), note.updated_at)
+    console.print(table)
     return 0
 
 
@@ -163,10 +263,15 @@ def cmd_note_search(args: argparse.Namespace) -> int:
     store = MemoryStore(config.db_path)
     results = store.search(args.query)
     if not results:
-        print("No matches.")
+        console.print("No matches.")
         return 0
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ID")
+    table.add_column("Title")
+    table.add_column("Snippet")
     for result in results:
-        print(f"{result.note_id}  {result.title}  {result.snippet}")
+        table.add_row(result.note_id, escape(result.title), escape(result.snippet))
+    console.print(table)
     return 0
 
 
@@ -175,10 +280,10 @@ def cmd_note_show(args: argparse.Namespace) -> int:
     vault = Vault(config.vault_dir)
     note = vault.get_note(args.note_id)
     if note is None:
-        print(f"No note found with id {args.note_id}")
+        console.print(f"No note found with id {args.note_id}")
         return 1
-    print(f"# {note.title}\n")
-    print(note.content)
+    console.print(f"[bold]{escape(note.title)}[/bold]\n")
+    console.print(Markdown(note.content))
     return 0
 
 
@@ -186,7 +291,7 @@ def cmd_remind_add(args: argparse.Namespace) -> int:
     config = load_config()
     reminders = ReminderStore(config.reminders_db_path)
     reminder = reminders.add(args.text, args.due_at)
-    print(f"Added reminder {reminder.id}: {reminder.text} (due {reminder.due_at})")
+    console.print(f"Added reminder {reminder.id}: {escape(reminder.text)} (due {reminder.due_at})")
     return 0
 
 
@@ -195,11 +300,17 @@ def cmd_remind_list(args: argparse.Namespace) -> int:
     reminders = ReminderStore(config.reminders_db_path)
     items = reminders.list(include_done=args.all)
     if not items:
-        print("No reminders.")
+        console.print("No reminders.")
         return 0
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ID")
+    table.add_column("Status")
+    table.add_column("Text")
+    table.add_column("Due")
     for reminder in items:
-        status = "done" if reminder.done else "pending"
-        print(f"{reminder.id}  [{status}]  {reminder.text}  (due {reminder.due_at})")
+        status = "[green]done[/green]" if reminder.done else "[yellow]pending[/yellow]"
+        table.add_row(reminder.id, status, escape(reminder.text), reminder.due_at)
+    console.print(table)
     return 0
 
 
@@ -208,9 +319,9 @@ def cmd_remind_done(args: argparse.Namespace) -> int:
     reminders = ReminderStore(config.reminders_db_path)
     ok = reminders.complete(args.reminder_id)
     if ok:
-        print(f"Marked {args.reminder_id} as done.")
+        console.print(f"Marked {args.reminder_id} as done.")
         return 0
-    print(f"No reminder found with id {args.reminder_id}")
+    console.print(f"No reminder found with id {args.reminder_id}")
     return 1
 
 
@@ -246,6 +357,13 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_remind_done(args)
     if args.command == "digest":
         return cmd_digest(args)
+    if args.command == "auth":
+        if args.auth_command == "set":
+            return cmd_auth_set(args)
+        if args.auth_command == "list":
+            return cmd_auth_list(args)
+        if args.auth_command == "delete":
+            return cmd_auth_delete(args)
 
     parser.print_help()
     return 1

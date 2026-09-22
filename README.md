@@ -56,8 +56,27 @@ cp .env.example .env
 jarvis chat
 ```
 
-Starts an interactive REPL (`you> ` / `jarvis> `). Type `exit` or `quit`, or
-press Ctrl-D, to leave.
+Starts an interactive REPL. Responses stream in live as the model generates
+them, tool calls show up as they happen (`→ using search_notes`), and the
+final answer renders as formatted markdown — all via [rich](https://github.com/Textualize/rich).
+Type `exit` or `quit`, or press Ctrl-D, to leave.
+
+### Storing API keys securely
+
+```bash
+jarvis auth set ANTHROPIC_API_KEY
+jarvis auth list
+jarvis auth delete ANTHROPIC_API_KEY
+```
+
+`jarvis auth set` prompts for the value (hidden input) and stores it in your
+OS's native keychain (macOS Keychain, Windows Credential Locker, Linux Secret
+Service) via [keyring](https://github.com/jaraco/keyring), instead of sitting
+in plaintext in `.env`. `load_config()` checks the keychain for any known key
+that isn't already set by your shell or `.env`, so this is a drop-in upgrade —
+nothing else changes. On a machine with no OS keychain available (headless
+servers, some Linux setups, CI), it silently falls back to `.env`/environment
+variables — `.env` remains fully supported.
 
 ### Notes
 

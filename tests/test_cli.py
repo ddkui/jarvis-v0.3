@@ -1,4 +1,4 @@
-from jarvis.cli import _summarize, build_parser
+from jarvis.cli import cmd_auth_delete, cmd_auth_list, cmd_auth_set, console, _summarize, build_parser
 
 
 def test_chat_command():
@@ -92,3 +92,64 @@ def test_summarize_keeps_only_first_line():
 
 def test_summarize_single_line_message_unchanged():
     assert _summarize(Exception("plain message")) == "plain message"
+
+
+def test_auth_set_command():
+    args = build_parser().parse_args(["auth", "set", "ANTHROPIC_API_KEY"])
+    assert args.command == "auth"
+    assert args.auth_command == "set"
+    assert args.name == "ANTHROPIC_API_KEY"
+
+
+def test_auth_list_command():
+    args = build_parser().parse_args(["auth", "list"])
+    assert args.command == "auth"
+    assert args.auth_command == "list"
+
+
+def test_auth_delete_command():
+    args = build_parser().parse_args(["auth", "delete", "GEMINI_API_KEY"])
+    assert args.command == "auth"
+    assert args.auth_command == "delete"
+    assert args.name == "GEMINI_API_KEY"
+
+
+def test_cmd_auth_set_stores_entered_value(monkeypatch):
+    stored = {}
+    monkeypatch.setattr(console, "input", lambda *a, **k: "sk-ant-typed")
+    monkeypatch.setattr("jarvis.cli.secrets.set_secret", lambda name, value: stored.__setitem__(name, value))
+
+    args = build_parser().parse_args(["auth", "set", "ANTHROPIC_API_KEY"])
+    assert cmd_auth_set(args) == 0
+    assert stored == {"ANTHROPIC_API_KEY": "sk-ant-typed"}
+
+
+def test_cmd_auth_set_empty_value_not_stored(monkeypatch):
+    monkeypatch.setattr(console, "input", lambda *a, **k: "")
+
+    def _fail(*_a, **_k):
+        raise AssertionError("set_secret should not be called for an empty value")
+
+    monkeypatch.setattr("jarvis.cli.secrets.set_secret", _fail)
+
+    args = build_parser().parse_args(["auth", "set", "ANTHROPIC_API_KEY"])
+    assert cmd_auth_set(args) == 1
+
+
+def test_cmd_auth_list_shows_stored_state(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "jarvis.cli.secrets.get_secret",
+        lambda name: "value" if name == "ANTHROPIC_API_KEY" else None,
+    )
+
+    assert cmd_auth_list(build_parser().parse_args(["auth", "list"])) == 0
+    output = capsys.readouterr().out
+    assert "ANTHROPIC_API_KEY" in output
+    assert "GEMINI_API_KEY" in output
+
+
+def test_cmd_auth_delete_reports_success_and_failure(monkeypatch):
+    monkeypatch.setattr("jarvis.cli.secrets.delete_secret", lambda name: name == "ANTHROPIC_API_KEY")
+
+    assert cmd_auth_delete(build_parser().parse_args(["auth", "delete", "ANTHROPIC_API_KEY"])) == 0
+    assert cmd_auth_delete(build_parser().parse_args(["auth", "delete", "GEMINI_API_KEY"])) == 1

@@ -7,22 +7,39 @@ from jarvis.agent.core import JarvisAgent
 from jarvis.models import AgentAbort, Tool
 
 
-def _response(content=None, tool_calls=None):
-    message = SimpleNamespace(content=content, tool_calls=tool_calls)
-    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+def _chunk(content=None, tool_call=None):
+    delta = SimpleNamespace(content=content, tool_calls=[tool_call] if tool_call else None)
+    return SimpleNamespace(choices=[SimpleNamespace(delta=delta)])
 
 
-def _tool_call(call_id, name, arguments):
-    return SimpleNamespace(
-        id=call_id,
-        function=SimpleNamespace(name=name, arguments=json.dumps(arguments)),
+def _tool_call_delta(index, call_id=None, name=None, arguments=None):
+    return SimpleNamespace(index=index, id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
+
+
+def _text_stream(text, split_into=2):
+    # Split into multiple fragments to exercise chunk accumulation, not just single-chunk delivery.
+    if len(text) < split_into:
+        split_into = 1
+    size = max(1, len(text) // split_into)
+    parts = [text[i : i + size] for i in range(0, len(text), size)] or [""]
+    return iter([_chunk(content=part) for part in parts])
+
+
+def _tool_call_stream(call_id, name, arguments):
+    # A real stream fragments id/name/arguments across separate chunks; simulate that split.
+    args_json = json.dumps(arguments)
+    return iter(
+        [
+            _chunk(tool_call=_tool_call_delta(0, call_id=call_id, name=name)),
+            _chunk(tool_call=_tool_call_delta(0, arguments=args_json)),
+        ]
     )
 
 
 def test_send_returns_text_when_no_tool_calls(monkeypatch):
     monkeypatch.setattr(
         "jarvis.agent.core.litellm.completion",
-        lambda **kwargs: _response(content="Hello there."),
+        lambda **kwargs: _text_stream("Hello there."),
     )
 
     agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[])
@@ -30,11 +47,25 @@ def test_send_returns_text_when_no_tool_calls(monkeypatch):
     assert agent.messages[-1] == {"role": "assistant", "content": "Hello there."}
 
 
+def test_send_streams_text_via_on_delta(monkeypatch):
+    monkeypatch.setattr(
+        "jarvis.agent.core.litellm.completion",
+        lambda **kwargs: _text_stream("Hello there.", split_into=3),
+    )
+
+    received = []
+    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[])
+    result = agent.send("hi", on_delta=received.append)
+
+    assert "".join(received) == "Hello there."
+    assert result == "Hello there."
+
+
 def test_send_executes_tool_then_returns_final_text(monkeypatch):
     calls = iter(
         [
-            _response(tool_calls=[_tool_call("call_1", "echo", {"text": "ping"})]),
-            _response(content="Done: pong"),
+            _tool_call_stream("call_1", "echo", {"text": "ping"}),
+            _text_stream("Done: pong"),
         ]
     )
     monkeypatch.setattr(
@@ -50,9 +81,11 @@ def test_send_executes_tool_then_returns_final_text(monkeypatch):
     )
     agent = JarvisAgent(model="gemini/gemini-2.5-flash", tools=[echo_tool])
 
-    result = agent.send("say ping")
+    tool_calls_seen = []
+    result = agent.send("say ping", on_tool_call=tool_calls_seen.append)
 
     assert result == "Done: pong"
+    assert tool_calls_seen == ["echo"]
     tool_result_messages = [m for m in agent.messages if m.get("role") == "tool"]
     assert tool_result_messages == [
         {"role": "tool", "tool_call_id": "call_1", "content": "pong"}
@@ -62,8 +95,8 @@ def test_send_executes_tool_then_returns_final_text(monkeypatch):
 def test_send_records_error_as_tool_result_without_raising(monkeypatch):
     calls = iter(
         [
-            _response(tool_calls=[_tool_call("call_1", "boom", {})]),
-            _response(content="Sorted it out."),
+            _tool_call_stream("call_1", "boom", {}),
+            _text_stream("Sorted it out."),
         ]
     )
     monkeypatch.setattr(
@@ -92,7 +125,7 @@ def test_send_records_error_as_tool_result_without_raising(monkeypatch):
 def test_send_stops_after_max_iterations(monkeypatch):
     monkeypatch.setattr(
         "jarvis.agent.core.litellm.completion",
-        lambda **kwargs: _response(tool_calls=[_tool_call("call_x", "loopy", {})]),
+        lambda **kwargs: _tool_call_stream("call_x", "loopy", {}),
     )
 
     loopy_tool = Tool(
@@ -111,8 +144,8 @@ def test_send_stops_after_max_iterations(monkeypatch):
 def test_image_result_becomes_followup_image_message(monkeypatch):
     calls = iter(
         [
-            _response(tool_calls=[_tool_call("call_1", "screenshot", {})]),
-            _response(content="I can see the desktop now."),
+            _tool_call_stream("call_1", "screenshot", {}),
+            _text_stream("I can see the desktop now."),
         ]
     )
     monkeypatch.setattr(
@@ -147,7 +180,7 @@ def test_image_result_becomes_followup_image_message(monkeypatch):
 def test_agent_abort_propagates_immediately(monkeypatch):
     monkeypatch.setattr(
         "jarvis.agent.core.litellm.completion",
-        lambda **kwargs: _response(tool_calls=[_tool_call("call_1", "click", {})]),
+        lambda **kwargs: _tool_call_stream("call_1", "click", {}),
     )
 
     def _abort(_args):
@@ -168,8 +201,8 @@ def test_agent_abort_propagates_immediately(monkeypatch):
 def test_unknown_tool_call_surfaces_as_error(monkeypatch):
     calls = iter(
         [
-            _response(tool_calls=[_tool_call("call_1", "does_not_exist", {})]),
-            _response(content="ok"),
+            _tool_call_stream("call_1", "does_not_exist", {}),
+            _text_stream("ok"),
         ]
     )
     monkeypatch.setattr(
