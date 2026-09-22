@@ -11,7 +11,7 @@ from rich.markup import escape
 from rich.spinner import Spinner
 from rich.table import Table
 
-from jarvis import secrets
+from jarvis import secrets, tts
 from jarvis.config import load_config
 from jarvis.memory.store import MemoryStore
 from jarvis.models import AgentAbort
@@ -34,7 +34,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="jarvis", description="Your personal second brain.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("chat", help="Start an interactive chat session with Jarvis.")
+    chat_parser = subparsers.add_parser("chat", help="Start an interactive chat session with Jarvis.")
+    chat_parser.add_argument(
+        "--speak", action="store_true", help="Also speak each response aloud (see README 'Voice output')."
+    )
 
     note_parser = subparsers.add_parser("note", help="Manage notes.")
     note_sub = note_parser.add_subparsers(dest="note_command", required=True)
@@ -111,6 +114,15 @@ def cmd_chat(args: argparse.Namespace) -> int:
     computer_use_active = any(tool.name.startswith("computer_") for tool in tools)
     max_tool_iterations = _COMPUTER_USE_MAX_TOOL_ITERATIONS if computer_use_active else _MAX_TOOL_ITERATIONS
 
+    speak_enabled = False
+    if args.speak:
+        try:
+            with console.status("[dim]Loading voice model...[/dim]"):
+                tts.ensure_ready()
+            speak_enabled = True
+        except tts.VoiceUnavailable as e:
+            console.print(f"[yellow]Voice unavailable:[/yellow] {e} Continuing in text-only mode.")
+
     try:
         agent = JarvisAgent(model=config.model, tools=tools, max_tool_iterations=max_tool_iterations)
         console.print("[bold cyan]Jarvis[/bold cyan] is ready. Type 'exit' or 'quit' to leave.")
@@ -130,7 +142,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 break
             if not user_input.strip():
                 continue
-            _run_turn(agent, user_input)
+            _run_turn(agent, user_input, speak=speak_enabled)
     except AgentAbort as e:
         console.print(f"\n[bold red]Stopped:[/bold red] {e}")
         return 1
@@ -165,7 +177,7 @@ def _key_env_var_hint(model: str) -> str:
     }.get(provider, "ANTHROPIC_API_KEY")
 
 
-def _run_turn(agent, user_input: str) -> str:
+def _run_turn(agent, user_input: str, speak: bool = False) -> str:
     """Send one message, streaming the response live into the terminal via rich."""
     state = {"live": None, "buffer": []}
 
@@ -195,6 +207,14 @@ def _run_turn(agent, user_input: str) -> str:
 
     console.print("[bold cyan]jarvis>[/bold cyan]")
     console.print(Markdown(response) if response else "[dim](no response)[/dim]")
+
+    if speak and response:
+        try:
+            with console.status("[dim]Generating voice...[/dim]"):
+                tts.speak(response)
+        except tts.VoiceUnavailable as e:
+            console.print(f"[dim](voice failed: {e})[/dim]")
+
     return response
 
 

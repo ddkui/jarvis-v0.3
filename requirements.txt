@@ -7,3 +7,7 @@ pytest>=8.0
 # Optional: only needed for computer-use tools (see README.md "Computer use").
 # pyautogui>=0.9.54
 # pillow>=10.0
+
+# Optional: only needed for `jarvis chat --speak` (see README.md "Voice output").
+# Pulls in torch/torchaudio - a multi-GB install.
+# chatterbox-tts>=0.1.0

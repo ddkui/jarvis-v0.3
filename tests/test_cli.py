@@ -4,6 +4,12 @@ from jarvis.cli import cmd_auth_delete, cmd_auth_list, cmd_auth_set, console, _s
 def test_chat_command():
     args = build_parser().parse_args(["chat"])
     assert args.command == "chat"
+    assert args.speak is False
+
+
+def test_chat_command_with_speak_flag():
+    args = build_parser().parse_args(["chat", "--speak"])
+    assert args.speak is True
 
 
 def test_note_add_command():

@@ -59,7 +59,9 @@ jarvis chat
 Starts an interactive REPL. Responses stream in live as the model generates
 them, tool calls show up as they happen (`→ using search_notes`), and the
 final answer renders as formatted markdown — all via [rich](https://github.com/Textualize/rich).
-Type `exit` or `quit`, or press Ctrl-D, to leave.
+Type `exit` or `quit`, or press Ctrl-D, to leave. Add `--speak` to also hear
+responses aloud (see "Voice output" below — off by default, extra setup
+required).
 
 ### Storing API keys securely
 
@@ -143,3 +145,35 @@ you send a message, Jarvis acts on its own until it's done or hits the
 failsafe. If you want a confirmation step before each action instead, that's
 a reasonable follow-up change to `jarvis/agent/core.py`'s tool-execution
 loop.
+
+## Voice output (off by default)
+
+`jarvis chat --speak` also speaks each response aloud, using
+[Chatterbox](https://github.com/resemble-ai/chatterbox) (Resemble AI, MIT
+licensed) for synthesis. It's off unless you ask for it:
+
+1. Install the optional dependency — this pulls in torch/torchaudio, a
+   multi-GB download: `pip install -e .[voice]`.
+2. Set `JARVIS_ENABLE_VOICE=1` in `.env`.
+3. Run `jarvis chat --speak`.
+
+The model (~1-2GB) downloads from Hugging Face and is cached locally the
+first time you use it; after that it runs offline. It's noticeably faster
+with a GPU — on CPU-only machines, expect each response to take a few
+seconds to synthesize before it plays. Playback shells out to whatever audio
+player your OS already has (`afplay` on macOS, `paplay`/`aplay`/`ffplay` on
+Linux, the built-in player on Windows) rather than pulling in another audio
+dependency.
+
+If the model isn't installed, hasn't been downloaded yet, or synthesis fails
+for any reason, Jarvis prints a one-line warning and falls back to text-only
+for that response (or the whole session, if it fails at startup) rather than
+crashing the chat.
+
+Why Chatterbox and not something else: see the comparison in this project's
+commit history / conversation — the short version is Chatterbox's MIT
+license has no commercial-use restriction (unlike Coqui XTTS-v2's CPML), and
+it's a credible size/quality tradeoff among fully open options. Piper is the
+lighter-weight fallback if you'd rather avoid the torch dependency, at the
+cost of sounding more synthetic — swap it in via a different `jarvis/tts.py`
+backend if that trade makes more sense for your machine.

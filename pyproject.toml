@@ -22,6 +22,9 @@ computer-use = [
     "pyautogui>=0.9.54",
     "pillow>=10.0",
 ]
+voice = [
+    "chatterbox-tts>=0.1.0",
+]
 
 [project.scripts]
 jarvis = "jarvis.cli:main"
