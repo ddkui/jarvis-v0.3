@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 import litellm
 from rich.console import Console
@@ -183,7 +184,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
             if not user_input.strip():
                 continue
             try:
-                _run_turn(agent, user_input, speak=speak_enabled)
+                _run_turn(agent, user_input, config.vault_dir, speak=speak_enabled)
             except (
                 AgentAbort,
                 litellm.exceptions.AuthenticationError,
@@ -196,13 +197,13 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 # name) or a deliberate safety stop, not something retrying will fix.
                 raise
             except Exception as e:
-                # Anything else (rate limits, the provider being briefly overloaded,
-                # a mid-stream hiccup) is usually transient - don't crash the whole
-                # session over it, just report it and let the user try again.
+                # Anything else - a transient provider hiccup (rate limit, brief
+                # overload, a mid-stream error) or an unexpected local bug - is
+                # reported without crashing the whole session over one bad turn.
                 console.print(
-                    f"[bold red]Delphi hit a problem reaching the model[/bold red]: {escape(_summarize(e))}\n"
-                    "This is often temporary (the provider may be overloaded or had a "
-                    "blip) — try again."
+                    f"[bold red]That turn hit a problem[/bold red]: {escape(_summarize(e))}\n"
+                    "If this keeps happening it's likely a real bug rather than a "
+                    "one-off — otherwise it's usually safe to just try again."
                 )
             runtime.save_conversation(config, agent)
     except AgentAbort as e:
@@ -241,7 +242,7 @@ def _key_env_var_hint(model: str) -> str:
     }.get(provider, "ANTHROPIC_API_KEY")
 
 
-def _run_turn(agent, user_input: str, speak: bool = False) -> str:
+def _run_turn(agent, user_input: str, vault_dir: Path | None = None, speak: bool = False) -> str:
     """Send one message, streaming the response live into the terminal via rich."""
     state = {"live": None, "buffer": []}
 
@@ -275,7 +276,7 @@ def _run_turn(agent, user_input: str, speak: bool = False) -> str:
     if speak and response:
         try:
             with console.status("[dim]Generating voice...[/dim]"):
-                tts.speak(response)
+                tts.speak(response, vault_dir)
         except tts.VoiceUnavailable as e:
             console.print(f"[dim](voice failed: {escape(str(e))})[/dim]")
 

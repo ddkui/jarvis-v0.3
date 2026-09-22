@@ -389,5 +389,22 @@ def test_cmd_chat_survives_a_transient_model_error_and_keeps_chatting(monkeypatc
     assert result == 0
     assert fake_agent.calls == 2
     out = capsys.readouterr().out
-    assert "hit a problem reaching the model" in out
+    assert "hit a problem" in out
     assert "all good now" in out
+
+
+def test_run_turn_passes_vault_dir_to_speak(monkeypatch, tmp_path):
+    # Regression: _run_turn called tts.speak(response) with no vault_dir, but
+    # tts.speak(text, vault_dir) requires it - --speak crashed on every single
+    # turn with "speak() missing 1 required positional argument: 'vault_dir'".
+    from types import SimpleNamespace
+
+    from delphi import tts
+
+    agent = SimpleNamespace(send=lambda *a, **k: "spoken response")
+    captured = {}
+    monkeypatch.setattr(tts, "speak", lambda text, vault_dir: captured.update(text=text, vault_dir=vault_dir))
+
+    _run_turn(agent, "hello", tmp_path, speak=True)
+
+    assert captured == {"text": "spoken response", "vault_dir": tmp_path}
