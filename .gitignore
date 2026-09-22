@@ -7,3 +7,9 @@ vault/
 .env
 .pytest_cache/
 *.egg-info/
+
+# Windows silent-launcher files (see README.md "Running in the background")
+# - user-generated, machine-specific, not part of the app.
+start-delphi.bat
+start-delphi.vbs
+delphi-tray.log

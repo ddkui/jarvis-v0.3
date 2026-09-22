@@ -64,8 +64,15 @@ def check_and_pull() -> bool:
         branch = _current_branch()
         if branch is None:
             return False
-        if _git("status", "--porcelain").stdout.strip():
-            return False  # uncommitted local changes - don't touch it
+        status_lines = _git("status", "--porcelain").stdout.splitlines()
+        # Only tracked-file changes ("M ", " M", "A ", etc.) block a pull - a
+        # stray untracked file ("??", e.g. a log file or a launcher script
+        # someone parked in the repo root) doesn't conflict with a
+        # fast-forward merge, and `git merge --ff-only` itself still fails
+        # safely below in the rare case an incoming commit would actually
+        # collide with one.
+        if any(not line.startswith("??") for line in status_lines):
+            return False  # uncommitted changes to tracked files - don't touch it
 
         if _git("fetch", "origin", branch).returncode != 0:
             return False

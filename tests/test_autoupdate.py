@@ -75,6 +75,15 @@ def test_check_and_pull_skips_when_local_changes_present(tmp_path, repo):
     assert (repo / "f.txt").read_text() == "local edit\n"
 
 
+def test_check_and_pull_ignores_untracked_files(tmp_path, repo):
+    (repo / "start-delphi.vbs").write_text("' launcher script, not part of the repo\n")
+    _push_new_commit(tmp_path, tmp_path / "remote.git", "other", "v2\n", "v2")
+
+    assert autoupdate.check_and_pull() is True
+    assert (repo / "f.txt").read_text() == "v2\n"
+    assert (repo / "start-delphi.vbs").is_file()
+
+
 def test_check_and_pull_skips_when_diverged(tmp_path, repo):
     (repo / "f.txt").write_text("local v2\n")
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
