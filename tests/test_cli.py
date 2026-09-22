@@ -136,6 +136,22 @@ def test_dashboard_command_with_options():
     assert args.no_browser is True
 
 
+def test_tray_command_defaults():
+    args = build_parser().parse_args(["tray"])
+    assert args.command == "tray"
+    assert args.port == 8734
+
+
+def test_tray_command_with_port():
+    args = build_parser().parse_args(["tray", "--port", "9001"])
+    assert args.port == 9001
+
+
+def test_install_launcher_command():
+    args = build_parser().parse_args(["install-launcher"])
+    assert args.command == "install-launcher"
+
+
 def test_no_command_raises():
     import pytest
 

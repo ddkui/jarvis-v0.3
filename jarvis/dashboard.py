@@ -11,15 +11,30 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import litellm
 from flask import Flask, after_this_request, jsonify, render_template, request, send_file
 
-from jarvis import settings as voice_settings
-from jarvis import tts
+from jarvis import runtime, settings as voice_settings, tts
+from jarvis.config import JarvisConfig
+from jarvis.models import AgentAbort
 
 
-def create_app(vault_dir: Path) -> Flask:
+def _summarize(e: Exception) -> str:
+    # litellm embeds a full traceback in some exceptions' message text; show only
+    # the first line so error responses stay readable.
+    return str(e).splitlines()[0]
+
+
+def create_app(config: JarvisConfig) -> Flask:
     app = Flask(__name__)
+    vault_dir = config.vault_dir
     app.config["VAULT_DIR"] = vault_dir
+    state = {"agent": None}
+
+    def _get_agent():
+        if state["agent"] is None:
+            state["agent"] = runtime.build_agent(config)
+        return state["agent"]
 
     @app.get("/")
     def index():
@@ -123,14 +138,48 @@ def create_app(vault_dir: Path) -> Flask:
 
         return send_file(out_path, mimetype="audio/wav", download_name="preview.wav")
 
+    @app.get("/chat")
+    def chat_page():
+        return render_template("chat.html", model=config.model)
+
+    @app.post("/chat/send")
+    def chat_send():
+        message = (request.form.get("message") or "").strip()
+        if not message:
+            return jsonify({"ok": False, "error": "message must not be empty"}), 400
+
+        agent = _get_agent()
+        try:
+            reply = agent.send(message)
+        except AgentAbort as e:
+            return jsonify({"ok": False, "error": f"Stopped: {e}"}), 200
+        except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"Couldn't authenticate with the API for model '{config.model}': {_summarize(e)}. "
+                    "Run `jarvis auth set <KEY>` or check .env.",
+                }
+            ), 200
+        except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
+            return jsonify(
+                {"ok": False, "error": f"Couldn't reach model '{config.model}': {_summarize(e)}"}
+            ), 200
+        return jsonify({"ok": True, "reply": reply})
+
+    @app.post("/chat/reset")
+    def chat_reset():
+        state["agent"] = None
+        return jsonify({"ok": True})
+
     return app
 
 
-def run_dashboard(vault_dir: Path, port: int = 8734, open_browser: bool = True) -> None:
+def run_dashboard(config: JarvisConfig, port: int = 8734, open_browser: bool = True) -> None:
     import threading
     import webbrowser
 
-    app = create_app(vault_dir)
+    app = create_app(config)
     url = f"http://127.0.0.1:{port}"
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()

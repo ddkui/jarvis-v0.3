@@ -204,3 +204,44 @@ Settings are stored at `<vault_dir>/.jarvis/voice_settings.json` and read by
 `flask` (included in that extra). It works even before `JARVIS_ENABLE_VOICE=1`
 is set, so you can configure everything ahead of time — the settings just
 won't audibly do anything until voice output is enabled.
+
+`jarvis dashboard` also serves a web chat at `/chat` — a browser alternative
+to `jarvis chat` that stays open in a tab instead of a terminal. It holds one
+conversation (no multi-tab sessions, no history across reloads — click "New
+conversation" to reset it) and doesn't stream token-by-token like the
+terminal chat does; you'll see a "Thinking..." state while it generates.
+
+## Running in the background
+
+By default `jarvis chat` and `jarvis dashboard` are things you start
+yourself, in a terminal, and stop with Ctrl-C. `jarvis tray` runs the same
+dashboard+chat web server as a background process with a system tray icon —
+click it to open the dashboard or chat in your browser, no terminal window
+needed once it's running:
+
+```bash
+pip install -e .[tray]
+jarvis tray
+```
+
+Needs a real desktop session (X11/Wayland on Linux, or macOS/Windows) — like
+computer-use and voice, it can't run headless, and reports a clear error
+rather than crashing if there's no display to attach to.
+
+To make Jarvis appear in your application launcher (the grid of installed
+apps), so you can start it by clicking an icon instead of typing a command:
+
+```bash
+jarvis install-launcher
+```
+
+Linux only — writes a standard `.desktop` file to
+`~/.local/share/applications/jarvis.desktop` plus a generated icon, pointing
+at `jarvis tray`. There's no equivalent here yet for macOS (a `.app` bundle)
+or Windows (a Start Menu shortcut); those would need their own installers.
+
+This doesn't auto-start Jarvis on login — `jarvis tray` still has to be
+launched once, by hand or from the launcher entry above. Auto-start (a
+systemd user service on Linux, a Login Item on macOS, Task Scheduler on
+Windows) is a reasonable follow-up if you want Jarvis always running in the
+background without launching it yourself each time.

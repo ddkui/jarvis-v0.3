@@ -1,18 +1,44 @@
 import io
 
+import litellm
 import pytest
 
-from jarvis import settings as voice_settings
+from jarvis import dashboard as dashboard_module
+from jarvis import runtime, settings as voice_settings
 from jarvis import tts
+from jarvis.config import JarvisConfig
 from jarvis.dashboard import create_app
+from jarvis.models import AgentAbort
+
+
+def _config(vault_dir):
+    return JarvisConfig(
+        model="anthropic/claude-opus-5",
+        vault_dir=vault_dir,
+        db_path=vault_dir / ".jarvis" / "memory.db",
+        reminders_db_path=vault_dir / ".jarvis" / "reminders.db",
+    )
 
 
 @pytest.fixture
 def client(tmp_path):
-    app = create_app(tmp_path)
+    app = create_app(_config(tmp_path))
     app.config["TESTING"] = True
     with app.test_client() as c:
         yield c, tmp_path
+
+
+class _FakeAgent:
+    def __init__(self, reply=None, raises=None):
+        self._reply = reply
+        self._raises = raises
+        self.sent = []
+
+    def send(self, message):
+        self.sent.append(message)
+        if self._raises is not None:
+            raise self._raises
+        return self._reply
 
 
 def test_index_renders_defaults(client):
@@ -149,3 +175,91 @@ def test_preview_uses_unsaved_form_values_not_saved_settings(client, monkeypatch
     assert captured["settings"].speaking_rate == 1.2
     # And the saved settings on disk are untouched by a preview.
     assert voice_settings.load_settings(vault_dir).exaggeration == 0.5
+
+
+def test_chat_page_renders(client):
+    c, _ = client
+    res = c.get("/chat")
+    assert res.status_code == 200
+    assert b"Jarvis" in res.data
+
+
+def test_chat_send_rejects_empty_message(client):
+    c, _ = client
+    res = c.post("/chat/send", data={"message": "   "})
+    assert res.status_code == 400
+    assert res.get_json()["ok"] is False
+
+
+def test_chat_send_returns_agent_reply(client, monkeypatch):
+    c, _ = client
+    fake_agent = _FakeAgent(reply="Hi there!")
+    monkeypatch.setattr(runtime, "build_agent", lambda config: fake_agent)
+
+    res = c.post("/chat/send", data={"message": "hello"})
+
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is True
+    assert data["reply"] == "Hi there!"
+    assert fake_agent.sent == ["hello"]
+
+
+def test_chat_send_reuses_same_agent_across_requests(client, monkeypatch):
+    c, _ = client
+    built = []
+
+    def _build(config):
+        agent = _FakeAgent(reply="ok")
+        built.append(agent)
+        return agent
+
+    monkeypatch.setattr(runtime, "build_agent", _build)
+
+    c.post("/chat/send", data={"message": "first"})
+    c.post("/chat/send", data={"message": "second"})
+
+    assert len(built) == 1
+    assert built[0].sent == ["first", "second"]
+
+
+def test_chat_reset_builds_a_fresh_agent(client, monkeypatch):
+    c, _ = client
+    built = []
+
+    def _build(config):
+        agent = _FakeAgent(reply="ok")
+        built.append(agent)
+        return agent
+
+    monkeypatch.setattr(runtime, "build_agent", _build)
+
+    c.post("/chat/send", data={"message": "first"})
+    c.post("/chat/reset")
+    c.post("/chat/send", data={"message": "second"})
+
+    assert len(built) == 2
+
+
+def test_chat_send_handles_agent_abort(client, monkeypatch):
+    c, _ = client
+    fake_agent = _FakeAgent(raises=AgentAbort("failsafe tripped"))
+    monkeypatch.setattr(runtime, "build_agent", lambda config: fake_agent)
+
+    res = c.post("/chat/send", data={"message": "click something"})
+
+    data = res.get_json()
+    assert data["ok"] is False
+    assert "Stopped" in data["error"]
+
+
+def test_chat_send_handles_authentication_error(client, monkeypatch):
+    c, _ = client
+    fake_agent = _FakeAgent(raises=litellm.exceptions.AuthenticationError("bad key", llm_provider="anthropic", model="x"))
+    monkeypatch.setattr(runtime, "build_agent", lambda config: fake_agent)
+
+    res = c.post("/chat/send", data={"message": "hi"})
+
+    data = res.get_json()
+    assert data["ok"] is False
+    assert "authenticate" in data["error"].lower()

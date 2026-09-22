@@ -11,15 +11,12 @@ from rich.markup import escape
 from rich.spinner import Spinner
 from rich.table import Table
 
-from jarvis import secrets, tts
+from jarvis import runtime, secrets, tts
 from jarvis.config import load_config
 from jarvis.memory.store import MemoryStore
 from jarvis.models import AgentAbort
 from jarvis.scheduler.jobs import ReminderStore, daily_digest
-from jarvis.tools import calendar_tools, computer_tools, email_tools, notes_tools, reminder_tools
 from jarvis.vault import Vault
-
-_COMPUTER_USE_MAX_TOOL_ITERATIONS = 25
 
 console = Console()
 
@@ -92,6 +89,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-browser", action="store_true", help="Don't automatically open a browser tab."
     )
 
+    tray_parser = subparsers.add_parser(
+        "tray", help="Run Jarvis in the background with a system tray icon."
+    )
+    tray_parser.add_argument("--port", type=int, default=8734)
+
+    subparsers.add_parser(
+        "install-launcher", help="Add Jarvis to your application launcher (Linux only)."
+    )
+
     return parser
 
 
@@ -101,29 +107,14 @@ def _parse_tags(raw: str | None) -> list[str]:
     return [tag.strip() for tag in raw.split(",") if tag.strip()]
 
 
-def _build_agent_stack(config):
-    vault = Vault(config.vault_dir)
-    store = MemoryStore(config.db_path)
-    reminders = ReminderStore(config.reminders_db_path)
-
-    tools = []
-    tools.extend(notes_tools.build_tools(vault, store))
-    tools.extend(reminder_tools.build_tools(reminders))
-    tools.extend(calendar_tools.build_tools())
-    tools.extend(email_tools.build_tools())
-    tools.extend(computer_tools.build_tools())
-
-    return vault, store, reminders, tools
-
-
 def cmd_chat(args: argparse.Namespace) -> int:
-    from jarvis.agent.core import _MAX_TOOL_ITERATIONS, JarvisAgent
+    from jarvis.agent.core import JarvisAgent
 
     config = load_config()
-    _vault, _store, _reminders, tools = _build_agent_stack(config)
+    _vault, _store, _reminders, tools = runtime.build_agent_stack(config)
 
     computer_use_active = any(tool.name.startswith("computer_") for tool in tools)
-    max_tool_iterations = _COMPUTER_USE_MAX_TOOL_ITERATIONS if computer_use_active else _MAX_TOOL_ITERATIONS
+    max_tool_iterations = runtime.max_tool_iterations_for(tools)
 
     speak_enabled = False
     if args.speak:
@@ -397,14 +388,52 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
 
     config = load_config()
     console.print(
-        f"[bold cyan]Jarvis dashboard[/bold cyan] starting at "
-        f"http://127.0.0.1:{args.port} (local only — never exposed to the network)."
+        f"[bold cyan]Jarvis[/bold cyan] starting at http://127.0.0.1:{args.port} "
+        "(local only — never exposed to the network): voice settings at [cyan]/[/cyan], "
+        "chat at [cyan]/chat[/cyan]."
     )
     console.print("Press Ctrl-C to stop.")
     try:
-        run_dashboard(config.vault_dir, port=args.port, open_browser=not args.no_browser)
+        run_dashboard(config, port=args.port, open_browser=not args.no_browser)
     except KeyboardInterrupt:
         console.print("\nStopped.")
+    return 0
+
+
+def cmd_tray(args: argparse.Namespace) -> int:
+    try:
+        from jarvis.tray import TrayUnavailable, run_tray
+    except ImportError as e:
+        console.print(
+            f"[bold red]System tray isn't available:[/bold red] {escape(str(e))}\n"
+            "Install the optional dependency: [cyan]pip install -e .[tray][/cyan]"
+        )
+        return 1
+
+    config = load_config()
+    console.print(
+        f"[bold cyan]Jarvis[/bold cyan] starting in the system tray "
+        f"(dashboard + chat at http://127.0.0.1:{args.port})."
+    )
+    try:
+        run_tray(config, port=args.port)
+    except TrayUnavailable as e:
+        console.print(f"[bold red]{escape(str(e))}[/bold red]")
+        return 1
+    console.print("Tray icon closed.")
+    return 0
+
+
+def cmd_install_launcher(args: argparse.Namespace) -> int:
+    from jarvis.launcher import install_launcher
+
+    try:
+        desktop_path = install_launcher()
+    except RuntimeError as e:
+        console.print(f"[bold red]{escape(str(e))}[/bold red]")
+        return 1
+    console.print(f"Installed launcher entry at {escape(str(desktop_path))}.")
+    console.print("Jarvis should now show up in your application launcher.")
     return 0
 
 
@@ -436,6 +465,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_digest(args)
     if args.command == "dashboard":
         return cmd_dashboard(args)
+    if args.command == "tray":
+        return cmd_tray(args)
+    if args.command == "install-launcher":
+        return cmd_install_launcher(args)
     if args.command == "auth":
         if args.auth_command == "set":
             return cmd_auth_set(args)
