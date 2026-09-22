@@ -35,3 +35,9 @@ class Tool:
     description: str
     input_schema: dict[str, Any]
     handler: Callable[[dict[str, Any]], str]
+
+
+class AgentAbort(Exception):
+    """Raise from a Tool.handler to stop the agent loop immediately, rather than
+    letting the failure come back as a retriable tool error the model might act on
+    again (e.g. a physical computer-use failsafe trip)."""

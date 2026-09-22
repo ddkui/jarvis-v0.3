@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from jarvis.agent.core import JarvisAgent
-from jarvis.models import Tool
+from jarvis.models import AgentAbort, Tool
 
 
 def _response(content=None, tool_calls=None):
@@ -106,6 +106,63 @@ def test_send_stops_after_max_iterations(monkeypatch):
     result = agent.send("loop forever")
 
     assert "gone through several tool calls" in result
+
+
+def test_image_result_becomes_followup_image_message(monkeypatch):
+    calls = iter(
+        [
+            _response(tool_calls=[_tool_call("call_1", "screenshot", {})]),
+            _response(content="I can see the desktop now."),
+        ]
+    )
+    monkeypatch.setattr(
+        "jarvis.agent.core.litellm.completion",
+        lambda **kwargs: next(calls),
+    )
+
+    screenshot_tool = Tool(
+        name="screenshot",
+        description="Takes a screenshot.",
+        input_schema={"type": "object", "properties": {}},
+        handler=lambda args: "data:image/png;base64,ZmFrZQ==",
+    )
+    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[screenshot_tool])
+
+    result = agent.send("look at the screen")
+
+    assert result == "I can see the desktop now."
+    tool_result = next(m for m in agent.messages if m.get("role") == "tool")
+    assert tool_result["content"] == "Image captured; see the image in the next message."
+
+    image_message = next(
+        m
+        for m in agent.messages
+        if m.get("role") == "user" and isinstance(m.get("content"), list)
+    )
+    assert image_message["content"] == [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,ZmFrZQ=="}}
+    ]
+
+
+def test_agent_abort_propagates_immediately(monkeypatch):
+    monkeypatch.setattr(
+        "jarvis.agent.core.litellm.completion",
+        lambda **kwargs: _response(tool_calls=[_tool_call("call_1", "click", {})]),
+    )
+
+    def _abort(_args):
+        raise AgentAbort("failsafe tripped")
+
+    click_tool = Tool(
+        name="click",
+        description="Clicks.",
+        input_schema={"type": "object", "properties": {}},
+        handler=_abort,
+    )
+    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[click_tool])
+
+    with pytest.raises(AgentAbort, match="failsafe tripped"):
+        agent.send("click something")
 
 
 def test_unknown_tool_call_surfaces_as_error(monkeypatch):

@@ -7,9 +7,12 @@ import litellm
 
 from jarvis.config import load_config
 from jarvis.memory.store import MemoryStore
+from jarvis.models import AgentAbort
 from jarvis.scheduler.jobs import ReminderStore, daily_digest
-from jarvis.tools import calendar_tools, email_tools, notes_tools, reminder_tools
+from jarvis.tools import calendar_tools, computer_tools, email_tools, notes_tools, reminder_tools
 from jarvis.vault import Vault
+
+_COMPUTER_USE_MAX_TOOL_ITERATIONS = 25
 
 
 def _summarize(e: Exception) -> str:
@@ -74,19 +77,29 @@ def _build_agent_stack(config):
     tools.extend(reminder_tools.build_tools(reminders))
     tools.extend(calendar_tools.build_tools())
     tools.extend(email_tools.build_tools())
+    tools.extend(computer_tools.build_tools())
 
     return vault, store, reminders, tools
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
-    from jarvis.agent.core import JarvisAgent
+    from jarvis.agent.core import _MAX_TOOL_ITERATIONS, JarvisAgent
 
     config = load_config()
     _vault, _store, _reminders, tools = _build_agent_stack(config)
 
+    computer_use_active = any(tool.name.startswith("computer_") for tool in tools)
+    max_tool_iterations = _COMPUTER_USE_MAX_TOOL_ITERATIONS if computer_use_active else _MAX_TOOL_ITERATIONS
+
     try:
-        agent = JarvisAgent(model=config.model, tools=tools)
+        agent = JarvisAgent(model=config.model, tools=tools, max_tool_iterations=max_tool_iterations)
         print("Jarvis is ready. Type 'exit' or 'quit' to leave.")
+        if computer_use_active:
+            print(
+                "Computer-use tools are active: Jarvis can see the screen and control "
+                "the mouse/keyboard on this machine. Drag the mouse to any screen "
+                "corner at any time to hard-stop it."
+            )
         while True:
             try:
                 user_input = input("you> ")
@@ -99,6 +112,9 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 continue
             response = agent.send(user_input)
             print(f"jarvis> {response}")
+    except AgentAbort as e:
+        print(f"\nStopped: {e}")
+        return 1
     except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
         print(
             f"Jarvis couldn't authenticate with the API for model '{config.model}': "

@@ -5,9 +5,10 @@ import json
 import litellm
 
 from jarvis.agent.prompts import SYSTEM_PROMPT
-from jarvis.models import Tool
+from jarvis.models import AgentAbort, Tool
 
 _MAX_TOOL_ITERATIONS = 8
+_IMAGE_DATA_URL_PREFIX = "data:image/"
 
 
 class JarvisAgent:
@@ -25,8 +26,11 @@ class JarvisAgent:
     layer is expected to catch it and print a friendly message.
     """
 
-    def __init__(self, model: str, tools: list[Tool]) -> None:
+    def __init__(
+        self, model: str, tools: list[Tool], max_tool_iterations: int = _MAX_TOOL_ITERATIONS
+    ) -> None:
         self.model = model
+        self._max_tool_iterations = max_tool_iterations
         self._tool_schemas = [
             {
                 "type": "function",
@@ -53,11 +57,14 @@ class JarvisAgent:
         Returns the assistant's final response text. Raises
         litellm.exceptions.AuthenticationError if the active provider's API key is
         missing/invalid, and any other litellm API error its own retries could not
-        resolve; callers should catch and present these to the user.
+        resolve; callers should catch and present these to the user. Also raises
+        jarvis.models.AgentAbort if a tool handler requests an immediate stop (e.g. a
+        computer-use failsafe trip) — this propagates out unconditionally rather than
+        becoming a tool error the model could act on again.
         """
         self.messages.append({"role": "user", "content": user_message})
 
-        for _ in range(_MAX_TOOL_ITERATIONS):
+        for _ in range(self._max_tool_iterations):
             response = litellm.completion(
                 model=self.model,
                 messages=[{"role": "system", "content": SYSTEM_PROMPT}] + self.messages,
@@ -85,17 +92,36 @@ class JarvisAgent:
             if not tool_calls:
                 return message.content or ""
 
+            image_urls = []
             for call in tool_calls:
                 try:
                     arguments = json.loads(call.function.arguments or "{}")
                     result_text = self._execute(call.function.name, arguments)
+                except AgentAbort:
+                    raise
                 except Exception as e:
                     result_text = f"Error: {e}"
+
+                if isinstance(result_text, str) and result_text.startswith(_IMAGE_DATA_URL_PREFIX):
+                    image_urls.append(result_text)
+                    result_text = "Image captured; see the image in the next message."
+
                 self.messages.append(
                     {
                         "role": "tool",
                         "tool_call_id": call.id,
                         "content": result_text,
+                    }
+                )
+
+            if image_urls:
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": url}}
+                            for url in image_urls
+                        ],
                     }
                 )
 

@@ -84,3 +84,43 @@ jarvis digest
 
 Prints a quick, offline (no API call) summary of notes updated in the last 24
 hours and reminders due today or overdue.
+
+## Computer use (off by default — read this before enabling)
+
+Jarvis can optionally see the screen and drive the mouse and keyboard on
+whatever machine runs `jarvis chat` — take a screenshot, click, move, type,
+press keys, scroll. This is real, unconfirmed control of your actual desktop:
+whatever app has focus, whatever window is open, whatever a click actually
+lands on. A misread screenshot or a slightly-off coordinate can hit the wrong
+button — send something, delete something, submit a form — before you have a
+chance to stop it. Do not enable this on a machine you can't afford to have
+something go wrong on; a spare machine, VM, or throwaway account is safer
+than your daily-driver desktop.
+
+**It's off unless you turn it on.** Two things are required:
+
+1. Install the optional dependencies: `pip install -e .[computer-use]` (or
+   `pip install pyautogui pillow`).
+2. Set `JARVIS_ENABLE_COMPUTER_USE=1` in `.env`.
+
+You'll also want a model that can actually see images — Claude and Gemini
+both work; check that whatever you set `JARVIS_MODEL` to supports vision.
+
+**Safety mechanisms that are always on when it's enabled:**
+
+- **Physical failsafe**: drag the mouse to any corner of the screen at any
+  time to immediately abort. This stops the whole conversation turn, not
+  just the one action — Jarvis won't retry.
+- **Live action log**: every click, keystroke, and move is printed to the
+  terminal as it happens (`[computer-use] click at (512, 300) ...`), so
+  whoever is watching the terminal sees it in real time.
+- The assistant is instructed to screenshot before acting and to pause and
+  ask before anything hard to undo (sending, submitting, deleting, paying,
+  posting) — this is a prompt-level habit, not a hard block, so don't rely
+  on it alone.
+
+This build doesn't gate individual actions on a confirmation prompt — once
+you send a message, Jarvis acts on its own until it's done or hits the
+failsafe. If you want a confirmation step before each action instead, that's
+a reasonable follow-up change to `jarvis/agent/core.py`'s tool-execution
+loop.

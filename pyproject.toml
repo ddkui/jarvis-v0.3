@@ -16,6 +16,10 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+computer-use = [
+    "pyautogui>=0.9.54",
+    "pillow>=10.0",
+]
 
 [project.scripts]
 jarvis = "jarvis.cli:main"
