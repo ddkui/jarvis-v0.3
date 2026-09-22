@@ -8,12 +8,12 @@ pytest>=8.0
 # pyautogui>=0.9.54
 # pillow>=10.0
 
-# Optional: only needed for `jarvis chat --speak` and `jarvis dashboard`
+# Optional: only needed for `delphi chat --speak` and `delphi dashboard`
 # (see README.md "Voice output"). Pulls in torch/torchaudio - a multi-GB install.
 # chatterbox-tts>=0.1.0
 # flask>=3.0
 
-# Optional: only needed for `jarvis tray` and `jarvis install-launcher`
+# Optional: only needed for `delphi tray` and `delphi install-launcher`
 # (see README.md "Running in the background").
 # pystray>=0.19
 # pillow>=10.0

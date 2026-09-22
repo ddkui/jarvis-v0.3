@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 
-from jarvis.models import Tool
+from delphi.models import Tool
 
 
 def build_tools() -> list[Tool]:
@@ -22,6 +22,6 @@ def build_tools() -> list[Tool]:
         raise NotImplementedError(
             "GOOGLE_GMAIL_CREDENTIALS is set, but the Gmail integration has not been "
             "implemented yet. Add the real search_email/send_email tools in "
-            "jarvis/tools/email_tools.py."
+            "delphi/tools/email_tools.py."
         )
     return []

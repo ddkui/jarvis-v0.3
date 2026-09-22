@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from jarvis import secrets
+from delphi import secrets
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -26,24 +26,24 @@ def _load_dotenv(path: Path) -> None:
 
 
 @dataclass
-class JarvisConfig:
+class DelphiConfig:
     model: str
     vault_dir: Path
     db_path: Path
     reminders_db_path: Path
 
 
-def load_config() -> JarvisConfig:
+def load_config() -> DelphiConfig:
     _load_dotenv(REPO_ROOT / ".env")
     secrets.apply_to_environ(secrets.KNOWN_KEYS)
 
-    model = os.environ.get("JARVIS_MODEL", "anthropic/claude-opus-5")
-    vault_dir = Path(os.environ.get("JARVIS_VAULT_DIR", "./vault"))
-    default_db_path = vault_dir / ".jarvis" / "memory.db"
-    db_path = Path(os.environ.get("JARVIS_DB_PATH", str(default_db_path)))
-    reminders_db_path = vault_dir / ".jarvis" / "reminders.db"
+    model = os.environ.get("DELPHI_MODEL", "anthropic/claude-opus-5")
+    vault_dir = Path(os.environ.get("DELPHI_VAULT_DIR", "./vault"))
+    default_db_path = vault_dir / ".delphi" / "memory.db"
+    db_path = Path(os.environ.get("DELPHI_DB_PATH", str(default_db_path)))
+    reminders_db_path = vault_dir / ".delphi" / "reminders.db"
 
-    return JarvisConfig(
+    return DelphiConfig(
         model=model,
         vault_dir=vault_dir,
         db_path=db_path,

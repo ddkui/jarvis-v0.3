@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from jarvis.memory.retrieval import retrieve_context
-from jarvis.memory.store import MemoryStore
-from jarvis.models import Tool
-from jarvis.vault import Vault
+from delphi.memory.retrieval import retrieve_context
+from delphi.memory.store import MemoryStore
+from delphi.models import Tool
+from delphi.vault import Vault
 
 
 def _require(input: dict, key: str) -> object:

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 
-from jarvis.models import Tool
+from delphi.models import Tool
 
 
 def build_tools() -> list[Tool]:
@@ -22,6 +22,6 @@ def build_tools() -> list[Tool]:
         raise NotImplementedError(
             "GOOGLE_CALENDAR_CREDENTIALS is set, but the Google Calendar integration "
             "has not been implemented yet. Add the real list_events/create_event tools "
-            "in jarvis/tools/calendar_tools.py."
+            "in delphi/tools/calendar_tools.py."
         )
     return []

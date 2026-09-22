@@ -1,6 +1,6 @@
-from jarvis.memory.retrieval import retrieve_context
-from jarvis.memory.store import MemoryStore
-from jarvis.vault import Vault
+from delphi.memory.retrieval import retrieve_context
+from delphi.memory.store import MemoryStore
+from delphi.vault import Vault
 
 
 def test_search_empty_store_returns_empty_list(tmp_path):

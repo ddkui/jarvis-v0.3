@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from jarvis.models import Note
+from delphi.models import Note
 
 
 def _slugify(title: str) -> str:

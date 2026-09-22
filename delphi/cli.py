@@ -11,12 +11,12 @@ from rich.markup import escape
 from rich.spinner import Spinner
 from rich.table import Table
 
-from jarvis import runtime, secrets, tts
-from jarvis.config import load_config
-from jarvis.memory.store import MemoryStore
-from jarvis.models import AgentAbort
-from jarvis.scheduler.jobs import ReminderStore, daily_digest
-from jarvis.vault import Vault
+from delphi import runtime, secrets, tts
+from delphi.config import load_config
+from delphi.memory.store import MemoryStore
+from delphi.models import AgentAbort
+from delphi.scheduler.jobs import ReminderStore, daily_digest
+from delphi.vault import Vault
 
 console = Console()
 
@@ -28,10 +28,10 @@ def _summarize(e: Exception) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="jarvis", description="Your personal second brain.")
+    parser = argparse.ArgumentParser(prog="delphi", description="Your personal second brain.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    chat_parser = subparsers.add_parser("chat", help="Start an interactive chat session with Jarvis.")
+    chat_parser = subparsers.add_parser("chat", help="Start an interactive chat session with Delphi.")
     chat_parser.add_argument(
         "--speak", action="store_true", help="Also speak each response aloud (see README 'Voice output')."
     )
@@ -73,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("digest", help="Print the daily digest.")
 
-    memory_parser = subparsers.add_parser("memory", help="See and manage what Jarvis remembers about you.")
+    memory_parser = subparsers.add_parser("memory", help="See and manage what Delphi remembers about you.")
     memory_sub = memory_parser.add_subparsers(dest="memory_command", required=True)
 
     memory_sub.add_parser("list", help="List remembered facts.")
@@ -101,12 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     tray_parser = subparsers.add_parser(
-        "tray", help="Run Jarvis in the background with a system tray icon."
+        "tray", help="Run Delphi in the background with a system tray icon."
     )
     tray_parser.add_argument("--port", type=int, default=8734)
 
     subparsers.add_parser(
-        "install-launcher", help="Add Jarvis to your application launcher (Linux only)."
+        "install-launcher", help="Add Delphi to your application launcher (Linux only)."
     )
 
     return parser
@@ -124,7 +124,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
     computer_use_active = any(tool.name.startswith("computer_") for tool in tools)
 
     if args.new:
-        from jarvis import conversation
+        from delphi import conversation
 
         conversation.clear(config.vault_dir)
 
@@ -139,12 +139,12 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
     agent = runtime.build_agent(config)
     try:
-        console.print("[bold cyan]Jarvis[/bold cyan] is ready. Type 'exit' or 'quit' to leave.")
+        console.print("[bold cyan]Delphi[/bold cyan] is ready. Type 'exit' or 'quit' to leave.")
         if agent.messages:
             console.print("[dim](resumed your last conversation — use --new to start fresh)[/dim]")
         if computer_use_active:
             console.print(
-                "[yellow]Computer-use tools are active[/yellow]: Jarvis can see the screen "
+                "[yellow]Computer-use tools are active[/yellow]: Delphi can see the screen "
                 "and control the mouse/keyboard on this machine. Drag the mouse to any "
                 "screen corner at any time to hard-stop it."
             )
@@ -166,18 +166,18 @@ def cmd_chat(args: argparse.Namespace) -> int:
         return 1
     except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
         console.print(
-            f"[bold red]Jarvis couldn't authenticate[/bold red] with the API for model "
+            f"[bold red]Delphi couldn't authenticate[/bold red] with the API for model "
             f"'{escape(config.model)}': {escape(_summarize(e))}\n"
             "If you haven't set an API key for this provider yet, run "
-            f"[cyan]jarvis auth set {_key_env_var_hint(config.model)}[/cyan] or copy "
+            f"[cyan]delphi auth set {_key_env_var_hint(config.model)}[/cyan] or copy "
             ".env.example to .env — otherwise this may be a network issue reaching the provider."
         )
         return 1
     except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
         console.print(
-            f"[bold red]Jarvis couldn't reach model[/bold red] '{escape(config.model)}': "
+            f"[bold red]Delphi couldn't reach model[/bold red] '{escape(config.model)}': "
             f"{escape(_summarize(e))}\n"
-            "Check JARVIS_MODEL uses a valid litellm provider prefix, e.g. "
+            "Check DELPHI_MODEL uses a valid litellm provider prefix, e.g. "
             "anthropic/claude-opus-5, gemini/gemini-2.5-flash, deepseek/deepseek-chat, "
             "groq/llama-3.3-70b-versatile, ollama/llama3.1."
         )
@@ -202,7 +202,7 @@ def _run_turn(agent, user_input: str, speak: bool = False) -> str:
 
     def start_live():
         state["live"] = Live(
-            Spinner("dots", text="Jarvis is thinking..."),
+            Spinner("dots", text="Delphi is thinking..."),
             console=console,
             refresh_per_second=12,
             transient=True,
@@ -224,7 +224,7 @@ def _run_turn(agent, user_input: str, speak: bool = False) -> str:
     finally:
         state["live"].stop()
 
-    console.print("[bold cyan]jarvis>[/bold cyan]")
+    console.print("[bold cyan]delphi>[/bold cyan]")
     console.print(Markdown(response) if response else "[dim](no response)[/dim]")
 
     if speak and response:
@@ -393,7 +393,7 @@ def cmd_digest(args: argparse.Namespace) -> int:
 
 
 def cmd_memory_list(args: argparse.Namespace) -> int:
-    from jarvis.memory import facts
+    from delphi.memory import facts
 
     config = load_config()
     items = facts.list_facts(config.vault_dir)
@@ -411,7 +411,7 @@ def cmd_memory_list(args: argparse.Namespace) -> int:
 
 
 def cmd_memory_forget(args: argparse.Namespace) -> int:
-    from jarvis.memory import facts
+    from delphi.memory import facts
 
     config = load_config()
     if facts.remove_fact(config.vault_dir, args.fact_id):
@@ -423,7 +423,7 @@ def cmd_memory_forget(args: argparse.Namespace) -> int:
 
 def cmd_dashboard(args: argparse.Namespace) -> int:
     try:
-        from jarvis.dashboard import run_dashboard
+        from delphi.dashboard import run_dashboard
     except ImportError as e:
         console.print(
             f"[bold red]Dashboard isn't available:[/bold red] {escape(str(e))}\n"
@@ -433,7 +433,7 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
 
     config = load_config()
     console.print(
-        f"[bold cyan]Jarvis[/bold cyan] starting at http://127.0.0.1:{args.port} "
+        f"[bold cyan]Delphi[/bold cyan] starting at http://127.0.0.1:{args.port} "
         "(local only — never exposed to the network): voice settings at [cyan]/[/cyan], "
         "chat at [cyan]/chat[/cyan]."
     )
@@ -447,7 +447,7 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
 
 def cmd_tray(args: argparse.Namespace) -> int:
     try:
-        from jarvis.tray import TrayUnavailable, run_tray
+        from delphi.tray import TrayUnavailable, run_tray
     except ImportError as e:
         console.print(
             f"[bold red]System tray isn't available:[/bold red] {escape(str(e))}\n"
@@ -457,7 +457,7 @@ def cmd_tray(args: argparse.Namespace) -> int:
 
     config = load_config()
     console.print(
-        f"[bold cyan]Jarvis[/bold cyan] starting in the system tray "
+        f"[bold cyan]Delphi[/bold cyan] starting in the system tray "
         f"(dashboard + chat at http://127.0.0.1:{args.port})."
     )
     try:
@@ -470,7 +470,7 @@ def cmd_tray(args: argparse.Namespace) -> int:
 
 
 def cmd_install_launcher(args: argparse.Namespace) -> int:
-    from jarvis.launcher import install_launcher
+    from delphi.launcher import install_launcher
 
     try:
         desktop_path = install_launcher()
@@ -478,7 +478,7 @@ def cmd_install_launcher(args: argparse.Namespace) -> int:
         console.print(f"[bold red]{escape(str(e))}[/bold red]")
         return 1
     console.print(f"Installed launcher entry at {escape(str(desktop_path))}.")
-    console.print("Jarvis should now show up in your application launcher.")
+    console.print("Delphi should now show up in your application launcher.")
     return 0
 
 

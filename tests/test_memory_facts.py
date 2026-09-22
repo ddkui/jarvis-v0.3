@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.memory import facts
+from delphi.memory import facts
 
 
 def test_list_facts_empty_when_missing(tmp_path: Path):
@@ -53,7 +53,7 @@ def test_facts_capped_at_max_dropping_oldest(tmp_path: Path):
 
 
 def test_list_facts_recovers_from_corrupt_json(tmp_path: Path):
-    path = tmp_path / ".jarvis" / "memory_facts.json"
+    path = tmp_path / ".delphi" / "memory_facts.json"
     path.parent.mkdir(parents=True)
     path.write_text("not json at all")
 

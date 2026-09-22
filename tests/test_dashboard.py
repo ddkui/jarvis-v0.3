@@ -3,20 +3,20 @@ import io
 import litellm
 import pytest
 
-from jarvis import dashboard as dashboard_module
-from jarvis import runtime, settings as voice_settings
-from jarvis import tts
-from jarvis.config import JarvisConfig
-from jarvis.dashboard import create_app
-from jarvis.models import AgentAbort
+from delphi import dashboard as dashboard_module
+from delphi import runtime, settings as voice_settings
+from delphi import tts
+from delphi.config import DelphiConfig
+from delphi.dashboard import create_app
+from delphi.models import AgentAbort
 
 
 def _config(vault_dir):
-    return JarvisConfig(
+    return DelphiConfig(
         model="anthropic/claude-opus-5",
         vault_dir=vault_dir,
-        db_path=vault_dir / ".jarvis" / "memory.db",
-        reminders_db_path=vault_dir / ".jarvis" / "reminders.db",
+        db_path=vault_dir / ".delphi" / "memory.db",
+        reminders_db_path=vault_dir / ".delphi" / "reminders.db",
     )
 
 
@@ -52,7 +52,7 @@ def test_index_renders_defaults(client):
 
 def test_index_warns_when_voice_disabled(client, monkeypatch):
     c, _ = client
-    monkeypatch.delenv("JARVIS_ENABLE_VOICE", raising=False)
+    monkeypatch.delenv("DELPHI_ENABLE_VOICE", raising=False)
     res = c.get("/")
     assert b"Voice output isn" in res.data
 
@@ -138,7 +138,7 @@ def test_delete_voice_not_found_returns_false(client):
 
 def test_preview_returns_error_when_voice_disabled(client, monkeypatch):
     c, _ = client
-    monkeypatch.delenv("JARVIS_ENABLE_VOICE", raising=False)
+    monkeypatch.delenv("DELPHI_ENABLE_VOICE", raising=False)
 
     res = c.post("/preview", data={"text": "hello"})
 
@@ -182,7 +182,7 @@ def test_chat_page_renders(client):
     c, _ = client
     res = c.get("/chat")
     assert res.status_code == 200
-    assert b"Jarvis" in res.data
+    assert b"Delphi" in res.data
 
 
 def test_chat_history_empty_for_fresh_conversation(client):
@@ -194,7 +194,7 @@ def test_chat_history_empty_for_fresh_conversation(client):
 
 def test_chat_history_reflects_resumed_conversation(client, monkeypatch):
     c, vault_dir = client
-    from jarvis import conversation
+    from delphi import conversation
 
     conversation.save_messages(
         vault_dir,
@@ -214,7 +214,7 @@ def test_chat_history_reflects_resumed_conversation(client, monkeypatch):
 
     assert res.get_json() == {
         "ok": True,
-        "turns": [{"role": "you", "text": "hi"}, {"role": "jarvis", "text": "Got it."}],
+        "turns": [{"role": "you", "text": "hi"}, {"role": "delphi", "text": "Got it."}],
     }
 
 

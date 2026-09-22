@@ -1,6 +1,6 @@
 """Provider API keys via the OS keychain (macOS Keychain, Windows Credential
 Locker, Linux Secret Service), with a silent fallback to plain env vars/.env
-wherever no OS keychain is available (headless servers, containers, CI) — jarvis
+wherever no OS keychain is available (headless servers, containers, CI) — delphi
 still has to run there, just without the extra protection.
 """
 
@@ -11,7 +11,7 @@ import os
 import keyring
 import keyring.errors
 
-_SERVICE_NAME = "jarvis"
+_SERVICE_NAME = "delphi"
 
 
 def get_secret(name: str) -> str | None:

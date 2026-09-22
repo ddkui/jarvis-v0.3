@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jarvis.memory import facts
-from jarvis.models import Tool
+from delphi.memory import facts
+from delphi.models import Tool
 
 
 def _require(input: dict, key: str) -> object:

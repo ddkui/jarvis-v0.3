@@ -1,9 +1,9 @@
-"""Linux app-launcher entry for Jarvis - `jarvis install-launcher`.
+"""Linux app-launcher entry for Delphi - `delphi install-launcher`.
 
 Writes a standard freedesktop.org .desktop file to ~/.local/share/applications/
-so Jarvis shows up in the application launcher/grid like any other installed
-app, plus a generated icon alongside it. Launching it runs `jarvis tray` - the
-system tray icon + background dashboard/chat server (jarvis/tray.py).
+so Delphi shows up in the application launcher/grid like any other installed
+app, plus a generated icon alongside it. Launching it runs `delphi tray` - the
+system tray icon + background dashboard/chat server (delphi/tray.py).
 
 Linux-only: macOS and Windows have their own app-registration mechanisms this
 doesn't attempt to cover.
@@ -17,7 +17,7 @@ from pathlib import Path
 
 _DESKTOP_ENTRY_TEMPLATE = """[Desktop Entry]
 Type=Application
-Name=Jarvis
+Name=Delphi
 Comment=Personal second-brain assistant
 Exec={exec_path} tray
 Icon={icon_path}
@@ -28,17 +28,17 @@ Categories=Utility;
 
 def install_launcher() -> Path:
     """Write the .desktop file and icon, return the .desktop file's path.
-    Raises RuntimeError on non-Linux platforms or if the jarvis executable
-    can't be found (jarvis isn't installed, e.g. via `pip install -e .`)."""
+    Raises RuntimeError on non-Linux platforms or if the delphi executable
+    can't be found (delphi isn't installed, e.g. via `pip install -e .`)."""
     if platform.system() != "Linux":
         raise RuntimeError(
             f"App launcher entries are only supported on Linux (this is {platform.system()})."
         )
 
-    jarvis_exe = Path(sys.executable).parent / "jarvis"
-    if not jarvis_exe.is_file():
+    delphi_exe = Path(sys.executable).parent / "delphi"
+    if not delphi_exe.is_file():
         raise RuntimeError(
-            f"Couldn't find the jarvis executable at {jarvis_exe}. Is jarvis installed (pip install -e .)?"
+            f"Couldn't find the delphi executable at {delphi_exe}. Is delphi installed (pip install -e .)?"
         )
 
     apps_dir = Path.home() / ".local" / "share" / "applications"
@@ -46,9 +46,9 @@ def install_launcher() -> Path:
     apps_dir.mkdir(parents=True, exist_ok=True)
     icons_dir.mkdir(parents=True, exist_ok=True)
 
-    icon_path = icons_dir / "jarvis.png"
+    icon_path = icons_dir / "delphi.png"
     try:
-        from jarvis.tray import _build_icon_image
+        from delphi.tray import _build_icon_image
 
         _build_icon_image().save(icon_path)
     except Exception as e:
@@ -57,7 +57,7 @@ def install_launcher() -> Path:
             "pip install -e .[tray]"
         ) from e
 
-    desktop_path = apps_dir / "jarvis.desktop"
-    desktop_path.write_text(_DESKTOP_ENTRY_TEMPLATE.format(exec_path=jarvis_exe, icon_path=icon_path))
+    desktop_path = apps_dir / "delphi.desktop"
+    desktop_path.write_text(_DESKTOP_ENTRY_TEMPLATE.format(exec_path=delphi_exe, icon_path=icon_path))
     desktop_path.chmod(0o755)
     return desktop_path

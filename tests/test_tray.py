@@ -3,16 +3,16 @@ import types
 
 import pytest
 
-from jarvis import tray
-from jarvis.config import JarvisConfig
+from delphi import tray
+from delphi.config import DelphiConfig
 
 
 def _config(tmp_path):
-    return JarvisConfig(
+    return DelphiConfig(
         model="anthropic/claude-opus-5",
         vault_dir=tmp_path,
-        db_path=tmp_path / ".jarvis" / "memory.db",
-        reminders_db_path=tmp_path / ".jarvis" / "reminders.db",
+        db_path=tmp_path / ".delphi" / "memory.db",
+        reminders_db_path=tmp_path / ".delphi" / "reminders.db",
     )
 
 
@@ -68,7 +68,7 @@ def test_run_tray_builds_menu_and_runs_icon_event_loop(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "pystray", fake_pystray)
 
     fake_app = types.SimpleNamespace(run=lambda **kwargs: None)
-    monkeypatch.setattr("jarvis.dashboard.create_app", lambda config: fake_app)
+    monkeypatch.setattr("delphi.dashboard.create_app", lambda config: fake_app)
 
     captured_thread = {}
 
@@ -93,7 +93,7 @@ def test_run_tray_builds_menu_and_runs_icon_event_loop(monkeypatch, tmp_path):
     assert len(created_icons) == 1
     icon = created_icons[0]
     assert icon.ran is True
-    assert icon.name == "jarvis"
+    assert icon.name == "delphi"
     menu_texts = [item.text for item in icon.menu.items if item is not FakeMenu.SEPARATOR]
     assert "Open Dashboard" in menu_texts
     assert "Open Chat" in menu_texts
@@ -117,7 +117,7 @@ def test_run_tray_wraps_unexpected_setup_errors(monkeypatch, tmp_path):
 
     fake_pystray.Icon = _explode
     monkeypatch.setitem(sys.modules, "pystray", fake_pystray)
-    monkeypatch.setattr("jarvis.dashboard.create_app", lambda config: types.SimpleNamespace(run=lambda **k: None))
+    monkeypatch.setattr("delphi.dashboard.create_app", lambda config: types.SimpleNamespace(run=lambda **k: None))
     monkeypatch.setattr(tray.threading.Thread, "start", lambda self: None)
 
     with pytest.raises(tray.TrayUnavailable, match="boom"):

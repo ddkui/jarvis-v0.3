@@ -6,10 +6,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from jarvis.models import Reminder
+from delphi.models import Reminder
 
 if TYPE_CHECKING:
-    from jarvis.vault import Vault
+    from delphi.vault import Vault
 
 
 def _parse_iso(value: str) -> datetime:

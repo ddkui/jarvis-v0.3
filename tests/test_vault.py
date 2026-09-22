@@ -1,4 +1,4 @@
-from jarvis.vault import Vault
+from delphi.vault import Vault
 
 
 def test_create_and_get_note(tmp_path):

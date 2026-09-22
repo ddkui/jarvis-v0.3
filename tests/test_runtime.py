@@ -1,17 +1,17 @@
 from pathlib import Path
 
-from jarvis import runtime
-from jarvis.agent.core import _MAX_TOOL_ITERATIONS
-from jarvis.config import JarvisConfig
+from delphi import runtime
+from delphi.agent.core import _MAX_TOOL_ITERATIONS
+from delphi.config import DelphiConfig
 
 
-def _config(tmp_path: Path) -> JarvisConfig:
+def _config(tmp_path: Path) -> DelphiConfig:
     vault_dir = tmp_path / "vault"
-    return JarvisConfig(
+    return DelphiConfig(
         model="anthropic/claude-opus-5",
         vault_dir=vault_dir,
-        db_path=vault_dir / ".jarvis" / "memory.db",
-        reminders_db_path=vault_dir / ".jarvis" / "reminders.db",
+        db_path=vault_dir / ".delphi" / "memory.db",
+        reminders_db_path=vault_dir / ".delphi" / "reminders.db",
     )
 
 
@@ -29,7 +29,7 @@ def test_max_tool_iterations_default_without_computer_use(tmp_path):
 
 
 def test_max_tool_iterations_raised_with_computer_use(tmp_path):
-    from jarvis.models import Tool
+    from delphi.models import Tool
 
     tools = [
         Tool(name="computer_click", description="", input_schema={"type": "object", "properties": {}}, handler=lambda a: "")
@@ -37,16 +37,16 @@ def test_max_tool_iterations_raised_with_computer_use(tmp_path):
     assert runtime.max_tool_iterations_for(tools) == runtime.COMPUTER_USE_MAX_TOOL_ITERATIONS
 
 
-def test_build_agent_constructs_jarvis_agent(tmp_path):
-    from jarvis.agent.core import JarvisAgent
+def test_build_agent_constructs_delphi_agent(tmp_path):
+    from delphi.agent.core import DelphiAgent
 
     agent = runtime.build_agent(_config(tmp_path))
-    assert isinstance(agent, JarvisAgent)
+    assert isinstance(agent, DelphiAgent)
     assert agent.model == "anthropic/claude-opus-5"
 
 
 def test_build_agent_resumes_persisted_conversation_by_default(tmp_path):
-    from jarvis import conversation
+    from delphi import conversation
 
     config = _config(tmp_path)
     saved = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
@@ -58,7 +58,7 @@ def test_build_agent_resumes_persisted_conversation_by_default(tmp_path):
 
 
 def test_build_agent_resume_false_starts_empty_even_with_saved_history(tmp_path):
-    from jarvis import conversation
+    from delphi import conversation
 
     config = _config(tmp_path)
     conversation.save_messages(config.vault_dir, [{"role": "user", "content": "hi"}])
@@ -69,7 +69,7 @@ def test_build_agent_resume_false_starts_empty_even_with_saved_history(tmp_path)
 
 
 def test_build_agent_includes_memory_facts_in_system_prompt(tmp_path):
-    from jarvis.memory import facts
+    from delphi.memory import facts
 
     config = _config(tmp_path)
     facts.add_fact(config.vault_dir, "The user's name is Dan.")
@@ -81,13 +81,13 @@ def test_build_agent_includes_memory_facts_in_system_prompt(tmp_path):
 
 def test_build_agent_system_prompt_has_no_memory_section_when_empty(tmp_path):
     agent = runtime.build_agent(_config(tmp_path))
-    from jarvis.agent.prompts import SYSTEM_PROMPT
+    from delphi.agent.prompts import SYSTEM_PROMPT
 
     assert agent.system_prompt == SYSTEM_PROMPT
 
 
 def test_save_conversation_persists_agent_messages(tmp_path):
-    from jarvis import conversation
+    from delphi import conversation
 
     config = _config(tmp_path)
     agent = runtime.build_agent(config)

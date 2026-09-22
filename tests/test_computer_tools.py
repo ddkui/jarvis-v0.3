@@ -4,8 +4,8 @@ import types
 
 import pytest
 
-from jarvis.models import AgentAbort
-from jarvis.tools import computer_tools
+from delphi.models import AgentAbort
+from delphi.tools import computer_tools
 
 
 def _install_fake_pyautogui(monkeypatch, *, failsafe_on=None):
@@ -75,17 +75,17 @@ def _tools_by_name(tools):
 
 
 def test_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("JARVIS_ENABLE_COMPUTER_USE", raising=False)
+    monkeypatch.delenv("DELPHI_ENABLE_COMPUTER_USE", raising=False)
     assert computer_tools.build_tools() == []
 
 
 def test_disabled_when_env_var_not_exactly_one(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "true")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "true")
     assert computer_tools.build_tools() == []
 
 
 def test_returns_empty_list_when_pyautogui_unavailable(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     monkeypatch.delitem(sys.modules, "pyautogui", raising=False)
 
     real_import = __import__
@@ -100,7 +100,7 @@ def test_returns_empty_list_when_pyautogui_unavailable(monkeypatch):
 
 
 def test_enabled_exposes_all_tools(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     _install_fake_pyautogui(monkeypatch)
 
     tools = _tools_by_name(computer_tools.build_tools())
@@ -116,7 +116,7 @@ def test_enabled_exposes_all_tools(monkeypatch):
 
 
 def test_screenshot_returns_image_data_url(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     _install_fake_pyautogui(monkeypatch)
 
     tools = _tools_by_name(computer_tools.build_tools())
@@ -128,7 +128,7 @@ def test_screenshot_returns_image_data_url(monkeypatch):
 
 
 def test_click_invokes_pyautogui_with_expected_args(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     fake = _install_fake_pyautogui(monkeypatch)
 
     tools = _tools_by_name(computer_tools.build_tools())
@@ -139,7 +139,7 @@ def test_click_invokes_pyautogui_with_expected_args(monkeypatch):
 
 
 def test_click_rejects_invalid_button(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     _install_fake_pyautogui(monkeypatch)
 
     tools = _tools_by_name(computer_tools.build_tools())
@@ -148,7 +148,7 @@ def test_click_rejects_invalid_button(monkeypatch):
 
 
 def test_click_missing_required_field_raises(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     _install_fake_pyautogui(monkeypatch)
 
     tools = _tools_by_name(computer_tools.build_tools())
@@ -157,7 +157,7 @@ def test_click_missing_required_field_raises(monkeypatch):
 
 
 def test_key_combo_uses_hotkey(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     fake = _install_fake_pyautogui(monkeypatch)
 
     tools = _tools_by_name(computer_tools.build_tools())
@@ -167,7 +167,7 @@ def test_key_combo_uses_hotkey(monkeypatch):
 
 
 def test_single_key_uses_press(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     fake = _install_fake_pyautogui(monkeypatch)
 
     tools = _tools_by_name(computer_tools.build_tools())
@@ -177,7 +177,7 @@ def test_single_key_uses_press(monkeypatch):
 
 
 def test_failsafe_trip_raises_agent_abort(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_COMPUTER_USE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_COMPUTER_USE", "1")
     _install_fake_pyautogui(monkeypatch, failsafe_on="click")
 
     tools = _tools_by_name(computer_tools.build_tools())

@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 
-from jarvis.models import Note, SearchResult
+from delphi.models import Note, SearchResult
 
 
 def _sanitize_fts_query(query: str) -> str:

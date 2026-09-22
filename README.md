@@ -1,7 +1,7 @@
-# Jarvis
+# Delphi
 
-Jarvis is a personal "second brain": a local, markdown-based note vault with a
-Jarvis-style AI assistant on top. Ask it about things you've written down, have
+Delphi is a personal "second brain": a local, markdown-based note vault with a
+Delphi-style AI assistant on top. Ask it about things you've written down, have
 it jot new notes and reminders for you mid-conversation, and get a quick daily
 digest of what's changed and what's due.
 
@@ -21,10 +21,10 @@ their own SQLite table, independent of the note vault.
 
 ## Choosing a model
 
-Set `JARVIS_MODEL` to a litellm `<provider>/<model>` string, and set that
+Set `DELPHI_MODEL` to a litellm `<provider>/<model>` string, and set that
 provider's API key. A few starting points:
 
-| Provider | `JARVIS_MODEL` example | API key env var |
+| Provider | `DELPHI_MODEL` example | API key env var |
 |---|---|---|
 | Claude (default, most capable) | `anthropic/claude-opus-5` | `ANTHROPIC_API_KEY` |
 | Gemini Flash (cheap, fast) | `gemini/gemini-2.5-flash` | `GEMINI_API_KEY` |
@@ -33,7 +33,7 @@ provider's API key. A few starting points:
 | Local via Ollama (free, runs on your machine) | `ollama/llama3.1` | none — run `ollama serve` |
 
 Any [model litellm supports](https://docs.litellm.ai/docs/providers) works the
-same way — just set `JARVIS_MODEL` and the matching key in `.env`.
+same way — just set `DELPHI_MODEL` and the matching key in `.env`.
 
 ## Usage
 
@@ -50,10 +50,10 @@ cp .env.example .env
 # then edit .env and set ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### Chat with Jarvis
+### Chat with Delphi
 
 ```bash
-jarvis chat
+delphi chat
 ```
 
 Starts an interactive REPL. Responses stream in live as the model generates
@@ -64,13 +64,13 @@ responses aloud (see "Voice output" below — off by default, extra setup
 required).
 
 The conversation picks up where you left off across restarts (stored at
-`<vault_dir>/.jarvis/conversation.json`) — it's one ongoing conversation, not
-a history of separate sessions. Run `jarvis chat --new` to clear it and start
+`<vault_dir>/.delphi/conversation.json`) — it's one ongoing conversation, not
+a history of separate sessions. Run `delphi chat --new` to clear it and start
 fresh instead.
 
 ### Memory
 
-Separately from the note vault, Jarvis keeps a short list of durable facts
+Separately from the note vault, Delphi keeps a short list of durable facts
 about you — your name, preferences, ongoing context — that it remembers
 silently across *every* conversation, not just the current one. It decides
 on its own when something's worth remembering (via a `remember` tool) rather
@@ -80,22 +80,22 @@ folded straight into its instructions on every turn. See what it's
 remembered, or make it forget something:
 
 ```bash
-jarvis memory list
-jarvis memory forget <fact_id>
+delphi memory list
+delphi memory forget <fact_id>
 ```
 
-Stored at `<vault_dir>/.jarvis/memory_facts.json`, capped at 50 facts (oldest
+Stored at `<vault_dir>/.delphi/memory_facts.json`, capped at 50 facts (oldest
 dropped first) so it can't grow the prompt without bound.
 
 ### Storing API keys securely
 
 ```bash
-jarvis auth set ANTHROPIC_API_KEY
-jarvis auth list
-jarvis auth delete ANTHROPIC_API_KEY
+delphi auth set ANTHROPIC_API_KEY
+delphi auth list
+delphi auth delete ANTHROPIC_API_KEY
 ```
 
-`jarvis auth set` prompts for the value (hidden input) and stores it in your
+`delphi auth set` prompts for the value (hidden input) and stores it in your
 OS's native keychain (macOS Keychain, Windows Credential Locker, Linux Secret
 Service) via [keyring](https://github.com/jaraco/keyring), instead of sitting
 in plaintext in `.env`. `load_config()` checks the keychain for any known key
@@ -107,25 +107,25 @@ variables — `.env` remains fully supported.
 ### Notes
 
 ```bash
-jarvis note add --title "Trip idea" --content "Look into Portugal in spring" --tags travel,ideas
-jarvis note list
-jarvis note search "portugal"
-jarvis note show <note_id>
-jarvis note delete <note_id>
+delphi note add --title "Trip idea" --content "Look into Portugal in spring" --tags travel,ideas
+delphi note list
+delphi note search "portugal"
+delphi note show <note_id>
+delphi note delete <note_id>
 ```
 
 ### Reminders
 
 ```bash
-jarvis remind add "Renew passport" --due 2026-11-01T09:00:00
-jarvis remind list --all
-jarvis remind done <reminder_id>
+delphi remind add "Renew passport" --due 2026-11-01T09:00:00
+delphi remind list --all
+delphi remind done <reminder_id>
 ```
 
 ### Daily digest
 
 ```bash
-jarvis digest
+delphi digest
 ```
 
 Prints a quick, offline (no API call) summary of notes updated in the last 24
@@ -133,8 +133,8 @@ hours and reminders due today or overdue.
 
 ## Computer use (off by default — read this before enabling)
 
-Jarvis can optionally see the screen and drive the mouse and keyboard on
-whatever machine runs `jarvis chat` — take a screenshot, click, move, type,
+Delphi can optionally see the screen and drive the mouse and keyboard on
+whatever machine runs `delphi chat` — take a screenshot, click, move, type,
 press keys, scroll. This is real, unconfirmed control of your actual desktop:
 whatever app has focus, whatever window is open, whatever a click actually
 lands on. A misread screenshot or a slightly-off coordinate can hit the wrong
@@ -147,16 +147,16 @@ than your daily-driver desktop.
 
 1. Install the optional dependencies: `pip install -e .[computer-use]` (or
    `pip install pyautogui pillow`).
-2. Set `JARVIS_ENABLE_COMPUTER_USE=1` in `.env`.
+2. Set `DELPHI_ENABLE_COMPUTER_USE=1` in `.env`.
 
 You'll also want a model that can actually see images — Claude and Gemini
-both work; check that whatever you set `JARVIS_MODEL` to supports vision.
+both work; check that whatever you set `DELPHI_MODEL` to supports vision.
 
 **Safety mechanisms that are always on when it's enabled:**
 
 - **Physical failsafe**: drag the mouse to any corner of the screen at any
   time to immediately abort. This stops the whole conversation turn, not
-  just the one action — Jarvis won't retry.
+  just the one action — Delphi won't retry.
 - **Live action log**: every click, keystroke, and move is printed to the
   terminal as it happens (`[computer-use] click at (512, 300) ...`), so
   whoever is watching the terminal sees it in real time.
@@ -166,21 +166,21 @@ both work; check that whatever you set `JARVIS_MODEL` to supports vision.
   on it alone.
 
 This build doesn't gate individual actions on a confirmation prompt — once
-you send a message, Jarvis acts on its own until it's done or hits the
+you send a message, Delphi acts on its own until it's done or hits the
 failsafe. If you want a confirmation step before each action instead, that's
-a reasonable follow-up change to `jarvis/agent/core.py`'s tool-execution
+a reasonable follow-up change to `delphi/agent/core.py`'s tool-execution
 loop.
 
 ## Voice output (off by default)
 
-`jarvis chat --speak` also speaks each response aloud, using
+`delphi chat --speak` also speaks each response aloud, using
 [Chatterbox](https://github.com/resemble-ai/chatterbox) (Resemble AI, MIT
 licensed) for synthesis. It's off unless you ask for it:
 
 1. Install the optional dependency — this pulls in torch/torchaudio, a
    multi-GB download: `pip install -e .[voice]`.
-2. Set `JARVIS_ENABLE_VOICE=1` in `.env`.
-3. Run `jarvis chat --speak`.
+2. Set `DELPHI_ENABLE_VOICE=1` in `.env`.
+3. Run `delphi chat --speak`.
 
 The model (~1-2GB) downloads from Hugging Face and is cached locally the
 first time you use it; after that it runs offline. It's noticeably faster
@@ -191,7 +191,7 @@ Linux, the built-in player on Windows) rather than pulling in another audio
 dependency.
 
 If the model isn't installed, hasn't been downloaded yet, or synthesis fails
-for any reason, Jarvis prints a one-line warning and falls back to text-only
+for any reason, Delphi prints a one-line warning and falls back to text-only
 for that response (or the whole session, if it fails at startup) rather than
 crashing the chat.
 
@@ -200,18 +200,18 @@ commit history / conversation — the short version is Chatterbox's MIT
 license has no commercial-use restriction (unlike Coqui XTTS-v2's CPML), and
 it's a credible size/quality tradeoff among fully open options. Piper is the
 lighter-weight fallback if you'd rather avoid the torch dependency, at the
-cost of sounding more synthetic — swap it in via a different `jarvis/tts.py`
+cost of sounding more synthetic — swap it in via a different `delphi/tts.py`
 backend if that trade makes more sense for your machine.
 
 ### Voice settings dashboard
 
 ```bash
-jarvis dashboard
+delphi dashboard
 ```
 
 Opens a small local web page (`http://127.0.0.1:8734`, bound to localhost
 only — never exposed to the network) for adjusting how the voice sounds,
-without editing files or restarting `jarvis chat`:
+without editing files or restarting `delphi chat`:
 
 - **Voice** — upload a short (few-second) reference audio clip and Chatterbox
   clones that voice; pick which one is active, or use the built-in default.
@@ -222,15 +222,15 @@ without editing files or restarting `jarvis chat`:
 - **Preview** — generates and plays a sample with your current (even
   unsaved) slider positions, so you can hear a change before committing to it.
 
-Settings are stored at `<vault_dir>/.jarvis/voice_settings.json` and read by
-`jarvis chat --speak` on every turn — no restart needed. Requires the same
+Settings are stored at `<vault_dir>/.delphi/voice_settings.json` and read by
+`delphi chat --speak` on every turn — no restart needed. Requires the same
 `pip install -e .[voice]` as `--speak`; the dashboard itself also needs
-`flask` (included in that extra). It works even before `JARVIS_ENABLE_VOICE=1`
+`flask` (included in that extra). It works even before `DELPHI_ENABLE_VOICE=1`
 is set, so you can configure everything ahead of time — the settings just
 won't audibly do anything until voice output is enabled.
 
-`jarvis dashboard` also serves a web chat at `/chat` — a browser alternative
-to `jarvis chat` that stays open in a tab instead of a terminal, backed by
+`delphi dashboard` also serves a web chat at `/chat` — a browser alternative
+to `delphi chat` that stays open in a tab instead of a terminal, backed by
 the same persisted conversation (reload the page, or restart the server, and
 your history reloads with it — click "New conversation" to actually clear
 it). It's one conversation with no multi-tab sessions, and it doesn't stream
@@ -239,35 +239,35 @@ while it generates.
 
 ## Running in the background
 
-By default `jarvis chat` and `jarvis dashboard` are things you start
-yourself, in a terminal, and stop with Ctrl-C. `jarvis tray` runs the same
+By default `delphi chat` and `delphi dashboard` are things you start
+yourself, in a terminal, and stop with Ctrl-C. `delphi tray` runs the same
 dashboard+chat web server as a background process with a system tray icon —
 click it to open the dashboard or chat in your browser, no terminal window
 needed once it's running:
 
 ```bash
 pip install -e .[tray]
-jarvis tray
+delphi tray
 ```
 
 Needs a real desktop session (X11/Wayland on Linux, or macOS/Windows) — like
 computer-use and voice, it can't run headless, and reports a clear error
 rather than crashing if there's no display to attach to.
 
-To make Jarvis appear in your application launcher (the grid of installed
+To make Delphi appear in your application launcher (the grid of installed
 apps), so you can start it by clicking an icon instead of typing a command:
 
 ```bash
-jarvis install-launcher
+delphi install-launcher
 ```
 
 Linux only — writes a standard `.desktop` file to
-`~/.local/share/applications/jarvis.desktop` plus a generated icon, pointing
-at `jarvis tray`. There's no equivalent here yet for macOS (a `.app` bundle)
+`~/.local/share/applications/delphi.desktop` plus a generated icon, pointing
+at `delphi tray`. There's no equivalent here yet for macOS (a `.app` bundle)
 or Windows (a Start Menu shortcut); those would need their own installers.
 
-This doesn't auto-start Jarvis on login — `jarvis tray` still has to be
+This doesn't auto-start Delphi on login — `delphi tray` still has to be
 launched once, by hand or from the launcher entry above. Auto-start (a
 systemd user service on Linux, a Login Item on macOS, Task Scheduler on
-Windows) is a reasonable follow-up if you want Jarvis always running in the
+Windows) is a reasonable follow-up if you want Delphi always running in the
 background without launching it yourself each time.

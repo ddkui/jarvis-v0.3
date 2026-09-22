@@ -1,4 +1,4 @@
-from jarvis.agent.prompts import SYSTEM_PROMPT, build_system_prompt
+from delphi.agent.prompts import SYSTEM_PROMPT, build_system_prompt
 
 
 def test_build_system_prompt_returns_base_when_no_facts():

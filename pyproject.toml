@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jarvis"
+name = "delphi"
 version = "0.3.0"
-description = "A personal second-brain notes app with a Jarvis-style AI assistant on top."
+description = "A personal second-brain notes app with a Delphi-style AI assistant on top."
 requires-python = ">=3.11"
 dependencies = [
     "litellm>=1.100.0",
@@ -33,10 +33,10 @@ tray = [
 ]
 
 [project.scripts]
-jarvis = "jarvis.cli:main"
+delphi = "delphi.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["jarvis*"]
+include = ["delphi*"]
 
 [tool.setuptools.package-data]
-jarvis = ["templates/*.html"]
+delphi = ["templates/*.html"]

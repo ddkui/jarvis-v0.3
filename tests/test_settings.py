@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis import settings as voice_settings
+from delphi import settings as voice_settings
 
 
 def test_load_settings_defaults_when_missing(tmp_path: Path):
@@ -26,7 +26,7 @@ def test_save_then_load_round_trip(tmp_path: Path):
 
 
 def test_load_settings_clamps_out_of_range_values_from_disk(tmp_path: Path):
-    path = tmp_path / ".jarvis" / "voice_settings.json"
+    path = tmp_path / ".delphi" / "voice_settings.json"
     path.parent.mkdir(parents=True)
     path.write_text('{"exaggeration": 99, "cfg_weight": -5, "speaking_rate": 10}')
 
@@ -38,7 +38,7 @@ def test_load_settings_clamps_out_of_range_values_from_disk(tmp_path: Path):
 
 
 def test_load_settings_recovers_from_corrupt_json(tmp_path: Path):
-    path = tmp_path / ".jarvis" / "voice_settings.json"
+    path = tmp_path / ".delphi" / "voice_settings.json"
     path.parent.mkdir(parents=True)
     path.write_text("{not valid json")
 
@@ -60,7 +60,7 @@ def test_add_voice_copies_file_and_registers_it(tmp_path: Path):
     dest = voice_settings.add_voice(tmp_path, "ada", source)
 
     assert dest.read_bytes() == b"fake-audio-bytes"
-    assert dest.parent == tmp_path / ".jarvis" / "voices"
+    assert dest.parent == tmp_path / ".delphi" / "voices"
 
     settings = voice_settings.load_settings(tmp_path)
     assert settings.voices["ada"] == str(dest)

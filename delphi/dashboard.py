@@ -1,8 +1,8 @@
-"""Local web dashboard for voice settings - `jarvis dashboard`.
+"""Local web dashboard for voice settings - `delphi dashboard`.
 
 A small Flask app, bound to 127.0.0.1 only (never exposed to the network - it has
 no authentication, and accepts file uploads and freeform text). Reads/writes the
-same jarvis/settings.py store that jarvis chat --speak reads from, so there's one
+same delphi/settings.py store that delphi chat --speak reads from, so there's one
 source of truth: no separate config path to keep in sync.
 """
 
@@ -14,9 +14,9 @@ from pathlib import Path
 import litellm
 from flask import Flask, after_this_request, jsonify, render_template, request, send_file
 
-from jarvis import runtime, settings as voice_settings, tts
-from jarvis.config import JarvisConfig
-from jarvis.models import AgentAbort
+from delphi import runtime, settings as voice_settings, tts
+from delphi.config import DelphiConfig
+from delphi.models import AgentAbort
 
 
 def _summarize(e: Exception) -> str:
@@ -25,7 +25,7 @@ def _summarize(e: Exception) -> str:
     return str(e).splitlines()[0]
 
 
-def create_app(config: JarvisConfig) -> Flask:
+def create_app(config: DelphiConfig) -> Flask:
     app = Flask(__name__)
     vault_dir = config.vault_dir
     app.config["VAULT_DIR"] = vault_dir
@@ -94,7 +94,7 @@ def create_app(config: JarvisConfig) -> Flask:
 
     @app.post("/preview")
     def preview():
-        text = request.form.get("text") or "Hello, I'm Jarvis. This is a preview of the current voice settings."
+        text = request.form.get("text") or "Hello, I'm Delphi. This is a preview of the current voice settings."
         try:
             tts.ensure_ready()
         except tts.VoiceUnavailable as e:
@@ -151,7 +151,7 @@ def create_app(config: JarvisConfig) -> Flask:
             if role == "user" and isinstance(content, str):
                 turns.append({"role": "you", "text": content})
             elif role == "assistant" and isinstance(content, str) and content:
-                turns.append({"role": "jarvis", "text": content})
+                turns.append({"role": "delphi", "text": content})
         return jsonify({"ok": True, "turns": turns})
 
     @app.post("/chat/send")
@@ -171,7 +171,7 @@ def create_app(config: JarvisConfig) -> Flask:
                 {
                     "ok": False,
                     "error": f"Couldn't authenticate with the API for model '{config.model}': {_summarize(e)}. "
-                    "Run `jarvis auth set <KEY>` or check .env.",
+                    "Run `delphi auth set <KEY>` or check .env.",
                 }
             ), 200
         except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
@@ -183,7 +183,7 @@ def create_app(config: JarvisConfig) -> Flask:
 
     @app.post("/chat/reset")
     def chat_reset():
-        from jarvis import conversation
+        from delphi import conversation
 
         state["agent"] = None
         conversation.clear(vault_dir)
@@ -192,7 +192,7 @@ def create_app(config: JarvisConfig) -> Flask:
     return app
 
 
-def run_dashboard(config: JarvisConfig, port: int = 8734, open_browser: bool = True) -> None:
+def run_dashboard(config: DelphiConfig, port: int = 8734, open_browser: bool = True) -> None:
     import threading
     import webbrowser
 

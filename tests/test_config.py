@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from jarvis.config import _load_dotenv
+from delphi.config import _load_dotenv
 
 
 def test_blank_placeholder_does_not_set_env_var(tmp_path: Path, monkeypatch):

@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from jarvis.agent.core import JarvisAgent
-from jarvis.models import AgentAbort, Tool
+from delphi.agent.core import DelphiAgent
+from delphi.models import AgentAbort, Tool
 
 
 def _chunk(content=None, tool_call=None):
@@ -38,23 +38,23 @@ def _tool_call_stream(call_id, name, arguments):
 
 def test_send_returns_text_when_no_tool_calls(monkeypatch):
     monkeypatch.setattr(
-        "jarvis.agent.core.litellm.completion",
+        "delphi.agent.core.litellm.completion",
         lambda **kwargs: _text_stream("Hello there."),
     )
 
-    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[])
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[])
     assert agent.send("hi") == "Hello there."
     assert agent.messages[-1] == {"role": "assistant", "content": "Hello there."}
 
 
 def test_send_streams_text_via_on_delta(monkeypatch):
     monkeypatch.setattr(
-        "jarvis.agent.core.litellm.completion",
+        "delphi.agent.core.litellm.completion",
         lambda **kwargs: _text_stream("Hello there.", split_into=3),
     )
 
     received = []
-    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[])
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[])
     result = agent.send("hi", on_delta=received.append)
 
     assert "".join(received) == "Hello there."
@@ -69,7 +69,7 @@ def test_send_executes_tool_then_returns_final_text(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "jarvis.agent.core.litellm.completion",
+        "delphi.agent.core.litellm.completion",
         lambda **kwargs: next(calls),
     )
 
@@ -79,7 +79,7 @@ def test_send_executes_tool_then_returns_final_text(monkeypatch):
         input_schema={"type": "object", "properties": {"text": {"type": "string"}}},
         handler=lambda args: "pong" if args["text"] == "ping" else "unexpected",
     )
-    agent = JarvisAgent(model="gemini/gemini-2.5-flash", tools=[echo_tool])
+    agent = DelphiAgent(model="gemini/gemini-2.5-flash", tools=[echo_tool])
 
     tool_calls_seen = []
     result = agent.send("say ping", on_tool_call=tool_calls_seen.append)
@@ -100,7 +100,7 @@ def test_send_records_error_as_tool_result_without_raising(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "jarvis.agent.core.litellm.completion",
+        "delphi.agent.core.litellm.completion",
         lambda **kwargs: next(calls),
     )
 
@@ -113,7 +113,7 @@ def test_send_records_error_as_tool_result_without_raising(monkeypatch):
         input_schema={"type": "object", "properties": {}},
         handler=_raise,
     )
-    agent = JarvisAgent(model="deepseek/deepseek-chat", tools=[boom_tool])
+    agent = DelphiAgent(model="deepseek/deepseek-chat", tools=[boom_tool])
 
     result = agent.send("trigger it")
 
@@ -124,7 +124,7 @@ def test_send_records_error_as_tool_result_without_raising(monkeypatch):
 
 def test_send_stops_after_max_iterations(monkeypatch):
     monkeypatch.setattr(
-        "jarvis.agent.core.litellm.completion",
+        "delphi.agent.core.litellm.completion",
         lambda **kwargs: _tool_call_stream("call_x", "loopy", {}),
     )
 
@@ -134,7 +134,7 @@ def test_send_stops_after_max_iterations(monkeypatch):
         input_schema={"type": "object", "properties": {}},
         handler=lambda args: "still going",
     )
-    agent = JarvisAgent(model="groq/llama-3.3-70b-versatile", tools=[loopy_tool])
+    agent = DelphiAgent(model="groq/llama-3.3-70b-versatile", tools=[loopy_tool])
 
     result = agent.send("loop forever")
 
@@ -149,7 +149,7 @@ def test_image_result_becomes_followup_image_message(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "jarvis.agent.core.litellm.completion",
+        "delphi.agent.core.litellm.completion",
         lambda **kwargs: next(calls),
     )
 
@@ -159,7 +159,7 @@ def test_image_result_becomes_followup_image_message(monkeypatch):
         input_schema={"type": "object", "properties": {}},
         handler=lambda args: "data:image/png;base64,ZmFrZQ==",
     )
-    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[screenshot_tool])
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[screenshot_tool])
 
     result = agent.send("look at the screen")
 
@@ -186,7 +186,7 @@ def test_agent_abort_mid_batch_leaves_valid_message_history(monkeypatch):
             _chunk(tool_call=_tool_call_delta(1, arguments="{}")),
         ]
     )
-    monkeypatch.setattr("jarvis.agent.core.litellm.completion", lambda **kwargs: two_calls_stream)
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", lambda **kwargs: two_calls_stream)
 
     safe_tool = Tool(
         name="safe",
@@ -200,7 +200,7 @@ def test_agent_abort_mid_batch_leaves_valid_message_history(monkeypatch):
         input_schema={"type": "object", "properties": {}},
         handler=lambda args: (_ for _ in ()).throw(AgentAbort("failsafe tripped")),
     )
-    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[safe_tool, click_tool])
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[safe_tool, click_tool])
 
     with pytest.raises(AgentAbort):
         agent.send("do both things")
@@ -219,7 +219,7 @@ def test_agent_abort_mid_batch_leaves_valid_message_history(monkeypatch):
 
 def test_agent_abort_propagates_immediately(monkeypatch):
     monkeypatch.setattr(
-        "jarvis.agent.core.litellm.completion",
+        "delphi.agent.core.litellm.completion",
         lambda **kwargs: _tool_call_stream("call_1", "click", {}),
     )
 
@@ -232,7 +232,7 @@ def test_agent_abort_propagates_immediately(monkeypatch):
         input_schema={"type": "object", "properties": {}},
         handler=_abort,
     )
-    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[click_tool])
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[click_tool])
 
     with pytest.raises(AgentAbort, match="failsafe tripped"):
         agent.send("click something")
@@ -246,11 +246,11 @@ def test_unknown_tool_call_surfaces_as_error(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "jarvis.agent.core.litellm.completion",
+        "delphi.agent.core.litellm.completion",
         lambda **kwargs: next(calls),
     )
 
-    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[])
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[])
     agent.send("call a missing tool")
 
     tool_result = next(m for m in agent.messages if m.get("role") == "tool")

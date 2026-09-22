@@ -1,7 +1,7 @@
-"""Persisted conversation history, so jarvis chat and the web chat pick up
+"""Persisted conversation history, so delphi chat and the web chat pick up
 where you left off across restarts instead of starting from zero every time.
-Stores the raw message list JarvisAgent.send() builds (JSON-serializable
-dicts - no special objects), at <vault_dir>/.jarvis/conversation.json.
+Stores the raw message list DelphiAgent.send() builds (JSON-serializable
+dicts - no special objects), at <vault_dir>/.delphi/conversation.json.
 
 This holds one ongoing conversation, not a history of past sessions - "New
 conversation" (the CLI's --new flag, the dashboard's reset button) clears it
@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 def _conversation_path(vault_dir: Path) -> Path:
-    return vault_dir / ".jarvis" / "conversation.json"
+    return vault_dir / ".delphi" / "conversation.json"
 
 
 def load_messages(vault_dir: Path) -> list[dict]:

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Jarvis — Chat</title>
+  <title>Delphi — Chat</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -33,7 +33,7 @@
     .msg { margin-bottom: 14px; white-space: pre-wrap; line-height: 1.4; }
     .msg .who { font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 2px; }
     .msg.you .who { color: #16a34a; }
-    .msg.jarvis .who { color: #2563eb; }
+    .msg.delphi .who { color: #2563eb; }
     .msg.error { color: #b91c1c; }
     .msg.error .who { color: #b91c1c; }
     form { display: flex; gap: 8px; }
@@ -60,7 +60,7 @@
 </head>
 <body>
   <header>
-    <h1>Jarvis</h1>
+    <h1>Delphi</h1>
     <div>
       <span class="model">{{ model }}</span>
       · <a class="nav" href="/">Settings</a>
@@ -71,7 +71,7 @@
   <div id="log"></div>
 
   <form id="chat-form">
-    <input type="text" id="message" placeholder="Message Jarvis..." autocomplete="off" autofocus required>
+    <input type="text" id="message" placeholder="Message Delphi..." autocomplete="off" autofocus required>
     <button type="submit" id="send-button">Send</button>
   </form>
 
@@ -125,12 +125,12 @@
         });
         const data = await res.json();
         if (data.ok) {
-          addMessage('jarvis', data.reply);
+          addMessage('delphi', data.reply);
         } else {
-          addMessage('jarvis', data.error, 'error');
+          addMessage('delphi', data.error, 'error');
         }
       } catch (err) {
-        addMessage('jarvis', 'Request failed: ' + err, 'error');
+        addMessage('delphi', 'Request failed: ' + err, 'error');
       } finally {
         input.disabled = false;
         sendButton.disabled = false;
@@ -140,7 +140,7 @@
     });
 
     async function resetChat() {
-      if (!confirm('Start a new conversation? This clears Jarvis\'s memory of this chat.')) return;
+      if (!confirm('Start a new conversation? This clears Delphi\'s memory of this chat.')) return;
       await fetch('/chat/reset', { method: 'POST' });
       log.innerHTML = '';
     }

@@ -1,5 +1,5 @@
-from jarvis.memory.store import MemoryStore
-from jarvis.vault import Vault
+from delphi.memory.store import MemoryStore
+from delphi.vault import Vault
 
 
 def retrieve_context(store: MemoryStore, vault: Vault, query: str, limit: int = 5) -> str:

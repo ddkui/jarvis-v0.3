@@ -1,4 +1,4 @@
-from jarvis.cli import (
+from delphi.cli import (
     _run_turn,
     _summarize,
     build_parser,
@@ -74,16 +74,16 @@ def test_note_delete_command():
 
 
 def test_cmd_note_delete_removes_note_end_to_end(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_VAULT_DIR", str(tmp_path / "vault"))
-    monkeypatch.delenv("JARVIS_DB_PATH", raising=False)
+    monkeypatch.setenv("DELPHI_VAULT_DIR", str(tmp_path / "vault"))
+    monkeypatch.delenv("DELPHI_DB_PATH", raising=False)
 
     add_args = build_parser().parse_args(
         ["note", "add", "--title", "Throwaway", "--content", "Delete me via CLI"]
     )
     cmd_note_add(add_args)
 
-    from jarvis.vault import Vault
-    from jarvis.config import load_config
+    from delphi.vault import Vault
+    from delphi.config import load_config
 
     config = load_config()
     note_id = Vault(config.vault_dir).list_notes()[0].id
@@ -144,13 +144,13 @@ def test_memory_forget_command():
 
 
 def test_cmd_memory_list_and_forget_end_to_end(monkeypatch, tmp_path, capsys):
-    from jarvis.cli import cmd_memory_forget, cmd_memory_list
-    from jarvis.memory import facts
+    from delphi.cli import cmd_memory_forget, cmd_memory_list
+    from delphi.memory import facts
 
-    monkeypatch.setenv("JARVIS_VAULT_DIR", str(tmp_path))
-    monkeypatch.delenv("JARVIS_DB_PATH", raising=False)
+    monkeypatch.setenv("DELPHI_VAULT_DIR", str(tmp_path))
+    monkeypatch.delenv("DELPHI_DB_PATH", raising=False)
 
-    from jarvis.config import load_config
+    from delphi.config import load_config
 
     config = load_config()
     fact = facts.add_fact(config.vault_dir, "The user's name is Dan.")
@@ -235,7 +235,7 @@ def test_auth_delete_command():
 def test_cmd_auth_set_stores_entered_value(monkeypatch):
     stored = {}
     monkeypatch.setattr(console, "input", lambda *a, **k: "sk-ant-typed")
-    monkeypatch.setattr("jarvis.cli.secrets.set_secret", lambda name, value: stored.__setitem__(name, value))
+    monkeypatch.setattr("delphi.cli.secrets.set_secret", lambda name, value: stored.__setitem__(name, value))
 
     args = build_parser().parse_args(["auth", "set", "ANTHROPIC_API_KEY"])
     assert cmd_auth_set(args) == 0
@@ -248,7 +248,7 @@ def test_cmd_auth_set_empty_value_not_stored(monkeypatch):
     def _fail(*_a, **_k):
         raise AssertionError("set_secret should not be called for an empty value")
 
-    monkeypatch.setattr("jarvis.cli.secrets.set_secret", _fail)
+    monkeypatch.setattr("delphi.cli.secrets.set_secret", _fail)
 
     args = build_parser().parse_args(["auth", "set", "ANTHROPIC_API_KEY"])
     assert cmd_auth_set(args) == 1
@@ -256,7 +256,7 @@ def test_cmd_auth_set_empty_value_not_stored(monkeypatch):
 
 def test_cmd_auth_list_shows_stored_state(monkeypatch, capsys):
     monkeypatch.setattr(
-        "jarvis.cli.secrets.get_secret",
+        "delphi.cli.secrets.get_secret",
         lambda name: "value" if name == "ANTHROPIC_API_KEY" else None,
     )
 
@@ -267,7 +267,7 @@ def test_cmd_auth_list_shows_stored_state(monkeypatch, capsys):
 
 
 def test_cmd_auth_delete_reports_success_and_failure(monkeypatch):
-    monkeypatch.setattr("jarvis.cli.secrets.delete_secret", lambda name: name == "ANTHROPIC_API_KEY")
+    monkeypatch.setattr("delphi.cli.secrets.delete_secret", lambda name: name == "ANTHROPIC_API_KEY")
 
     assert cmd_auth_delete(build_parser().parse_args(["auth", "delete", "ANTHROPIC_API_KEY"])) == 0
     assert cmd_auth_delete(build_parser().parse_args(["auth", "delete", "GEMINI_API_KEY"])) == 1
@@ -276,41 +276,41 @@ def test_cmd_auth_delete_reports_success_and_failure(monkeypatch):
 def test_conversation_persists_across_agent_rebuilds(monkeypatch, tmp_path):
     from types import SimpleNamespace
 
-    from jarvis import runtime
-    from jarvis.config import JarvisConfig
+    from delphi import runtime
+    from delphi.config import DelphiConfig
 
-    config = JarvisConfig(
+    config = DelphiConfig(
         model="anthropic/claude-opus-5",
         vault_dir=tmp_path,
-        db_path=tmp_path / ".jarvis" / "memory.db",
-        reminders_db_path=tmp_path / ".jarvis" / "reminders.db",
+        db_path=tmp_path / ".delphi" / "memory.db",
+        reminders_db_path=tmp_path / ".delphi" / "reminders.db",
     )
 
     def fake_completion(**kwargs):
         delta = SimpleNamespace(content="Hi there!", tool_calls=None)
         return iter([SimpleNamespace(choices=[SimpleNamespace(delta=delta)])])
 
-    monkeypatch.setattr("jarvis.agent.core.litellm.completion", fake_completion)
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
 
     agent = runtime.build_agent(config)
-    _run_turn(agent, "hello jarvis")
+    _run_turn(agent, "hello delphi")
     runtime.save_conversation(config, agent)
 
     resumed_agent = runtime.build_agent(config)
     assert resumed_agent.messages == agent.messages
-    assert resumed_agent.messages[0] == {"role": "user", "content": "hello jarvis"}
+    assert resumed_agent.messages[0] == {"role": "user", "content": "hello delphi"}
     assert resumed_agent.messages[1] == {"role": "assistant", "content": "Hi there!"}
 
 
 def test_new_flag_clears_persisted_conversation(tmp_path):
-    from jarvis import conversation, runtime
-    from jarvis.config import JarvisConfig
+    from delphi import conversation, runtime
+    from delphi.config import DelphiConfig
 
-    config = JarvisConfig(
+    config = DelphiConfig(
         model="anthropic/claude-opus-5",
         vault_dir=tmp_path,
-        db_path=tmp_path / ".jarvis" / "memory.db",
-        reminders_db_path=tmp_path / ".jarvis" / "reminders.db",
+        db_path=tmp_path / ".delphi" / "memory.db",
+        reminders_db_path=tmp_path / ".delphi" / "reminders.db",
     )
     conversation.save_messages(config.vault_dir, [{"role": "user", "content": "old conversation"}])
 

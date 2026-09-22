@@ -1,8 +1,8 @@
 """Desktop control: screenshots, mouse, and keyboard, via pyautogui.
 
 Disabled by default — this is real, unconfirmed control of whatever computer runs
-`jarvis chat` (any app, any window, any file dialog). Enable it deliberately with
-JARVIS_ENABLE_COMPUTER_USE=1 once you understand the risk (see README.md
+`delphi chat` (any app, any window, any file dialog). Enable it deliberately with
+DELPHI_ENABLE_COMPUTER_USE=1 once you understand the risk (see README.md
 "Computer use"). Two safety mechanisms are always on regardless of that setting:
 
   - pyautogui's failsafe: dragging the mouse to any screen corner mid-action raises
@@ -10,7 +10,7 @@ JARVIS_ENABLE_COMPUTER_USE=1 once you understand the risk (see README.md
     this stops the whole agent loop immediately rather than being retried as a
     normal tool error.
   - Every action is logged to stderr with its arguments as it happens, so whoever is
-    watching the terminal has a live, real-time record of what Jarvis is about to do.
+    watching the terminal has a live, real-time record of what Delphi is about to do.
 
 Requires a real display (X11/Wayland/macOS/Windows desktop session) — importing
 pyautogui without one raises immediately, which build_tools() catches and reports.
@@ -23,9 +23,9 @@ import io
 import os
 import sys
 
-from jarvis.models import AgentAbort, Tool
+from delphi.models import AgentAbort, Tool
 
-_ENABLE_ENV_VAR = "JARVIS_ENABLE_COMPUTER_USE"
+_ENABLE_ENV_VAR = "DELPHI_ENABLE_COMPUTER_USE"
 _VALID_BUTTONS = {"left", "right", "middle"}
 
 
@@ -141,7 +141,7 @@ def build_tools() -> list[Tool]:
         width, height = pyautogui.size()
     except Exception as e:
         print(
-            f"[computer-use] JARVIS_ENABLE_COMPUTER_USE=1 but pyautogui isn't usable "
+            f"[computer-use] DELPHI_ENABLE_COMPUTER_USE=1 but pyautogui isn't usable "
             f"here ({e}); computer-use tools are disabled for this session.",
             file=sys.stderr,
         )

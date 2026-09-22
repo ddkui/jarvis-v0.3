@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from jarvis import conversation
+from delphi import conversation
 
 
 def test_load_messages_empty_when_missing(tmp_path: Path):
@@ -24,7 +24,7 @@ def test_save_then_load_round_trip(tmp_path: Path):
 
 
 def test_load_messages_recovers_from_corrupt_json(tmp_path: Path):
-    path = tmp_path / ".jarvis" / "conversation.json"
+    path = tmp_path / ".delphi" / "conversation.json"
     path.parent.mkdir(parents=True)
     path.write_text("{not valid json")
 
@@ -32,7 +32,7 @@ def test_load_messages_recovers_from_corrupt_json(tmp_path: Path):
 
 
 def test_load_messages_recovers_from_non_list_json(tmp_path: Path):
-    path = tmp_path / ".jarvis" / "conversation.json"
+    path = tmp_path / ".delphi" / "conversation.json"
     path.parent.mkdir(parents=True)
     path.write_text('{"not": "a list"}')
 

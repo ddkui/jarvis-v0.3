@@ -3,8 +3,8 @@ import types
 
 import pytest
 
-from jarvis import settings as voice_settings
-from jarvis import tts
+from delphi import settings as voice_settings
+from delphi import tts
 
 
 def _install_fake_torch_stack(monkeypatch, *, cuda_available=False, generate_fails=False):
@@ -59,18 +59,18 @@ def _reset_model_cache(monkeypatch):
 
 
 def test_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("JARVIS_ENABLE_VOICE", raising=False)
+    monkeypatch.delenv("DELPHI_ENABLE_VOICE", raising=False)
     assert tts.is_enabled() is False
 
 
 def test_ensure_ready_raises_when_disabled(monkeypatch):
-    monkeypatch.delenv("JARVIS_ENABLE_VOICE", raising=False)
-    with pytest.raises(tts.VoiceUnavailable, match="JARVIS_ENABLE_VOICE"):
+    monkeypatch.delenv("DELPHI_ENABLE_VOICE", raising=False)
+    with pytest.raises(tts.VoiceUnavailable, match="DELPHI_ENABLE_VOICE"):
         tts.ensure_ready()
 
 
 def test_ensure_ready_raises_when_dependency_missing(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     monkeypatch.delitem(sys.modules, "chatterbox", raising=False)
     monkeypatch.delitem(sys.modules, "torch", raising=False)
 
@@ -79,14 +79,14 @@ def test_ensure_ready_raises_when_dependency_missing(monkeypatch):
 
 
 def test_ensure_ready_succeeds_when_available(monkeypatch):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     _install_fake_torch_stack(monkeypatch)
 
     tts.ensure_ready()
 
 
 def test_synthesize_writes_generated_wav(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     saved, _ = _install_fake_torch_stack(monkeypatch)
 
     out = tmp_path / "out.wav"
@@ -98,7 +98,7 @@ def test_synthesize_writes_generated_wav(monkeypatch, tmp_path):
 
 
 def test_synthesize_uses_default_settings_when_none_saved(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     _, generate_calls = _install_fake_torch_stack(monkeypatch)
 
     tts.synthesize("hi", tmp_path / "out.wav", tmp_path)
@@ -109,7 +109,7 @@ def test_synthesize_uses_default_settings_when_none_saved(monkeypatch, tmp_path)
 
 
 def test_synthesize_uses_saved_voice_settings(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     _, generate_calls = _install_fake_torch_stack(monkeypatch)
 
     settings = voice_settings.VoiceSettings(
@@ -128,7 +128,7 @@ def test_synthesize_uses_saved_voice_settings(monkeypatch, tmp_path):
 
 
 def test_synthesize_applies_speaking_rate(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     saved, _ = _install_fake_torch_stack(monkeypatch)
 
     stretch_calls = []
@@ -173,7 +173,7 @@ def test_strip_markdown_removes_code_blocks():
 
 
 def test_speak_raises_voice_unavailable_on_synthesis_failure(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     _install_fake_torch_stack(monkeypatch, generate_fails=True)
 
     with pytest.raises(tts.VoiceUnavailable, match="synthesis failed"):
@@ -181,14 +181,14 @@ def test_speak_raises_voice_unavailable_on_synthesis_failure(monkeypatch, tmp_pa
 
 
 def test_speak_empty_text_is_a_noop(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     _install_fake_torch_stack(monkeypatch)
 
     tts.speak("   ", tmp_path)
 
 
 def test_speak_plays_audio_via_platform_player(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     _install_fake_torch_stack(monkeypatch)
 
     played = []
@@ -203,7 +203,7 @@ def test_speak_plays_audio_via_platform_player(monkeypatch, tmp_path):
 
 
 def test_speak_wraps_playback_failure_as_voice_unavailable(monkeypatch, tmp_path):
-    monkeypatch.setenv("JARVIS_ENABLE_VOICE", "1")
+    monkeypatch.setenv("DELPHI_ENABLE_VOICE", "1")
     _install_fake_torch_stack(monkeypatch)
 
     monkeypatch.setattr(tts.platform, "system", lambda: "Linux")

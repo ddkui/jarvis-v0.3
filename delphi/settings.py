@@ -1,5 +1,5 @@
 """Persisted voice settings (active voice, intonation, speaking rate) - edited via
-`jarvis dashboard` or by hand. Stored as JSON at <vault_dir>/.jarvis/voice_settings.json,
+`delphi dashboard` or by hand. Stored as JSON at <vault_dir>/.delphi/voice_settings.json,
 separate from .env: .env is secrets/environment config, this is user preference state
 that a local web UI reads and writes.
 """
@@ -30,7 +30,7 @@ class VoiceSettings:
 
 
 def _settings_path(vault_dir: Path) -> Path:
-    return vault_dir / ".jarvis" / "voice_settings.json"
+    return vault_dir / ".delphi" / "voice_settings.json"
 
 
 def load_settings(vault_dir: Path) -> VoiceSettings:
@@ -60,7 +60,7 @@ def add_voice(vault_dir: Path, name: str, source_path: Path) -> Path:
     """Copy a reference audio file into the vault's voices dir and register it by name."""
     if not name.strip():
         raise ValueError("voice name must not be empty")
-    voices_dir = vault_dir / ".jarvis" / "voices"
+    voices_dir = vault_dir / ".delphi" / "voices"
     voices_dir.mkdir(parents=True, exist_ok=True)
     dest = voices_dir / f"{name}{source_path.suffix or '.wav'}"
     dest.write_bytes(source_path.read_bytes())

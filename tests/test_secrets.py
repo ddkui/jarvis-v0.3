@@ -1,7 +1,7 @@
 import keyring.errors
 import pytest
 
-from jarvis import secrets
+from delphi import secrets
 
 
 class _FakeKeyring:

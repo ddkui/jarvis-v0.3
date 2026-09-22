@@ -1,6 +1,6 @@
-"""System tray icon for Jarvis - `jarvis tray`.
+"""System tray icon for Delphi - `delphi tray`.
 
-Runs the same dashboard+chat web server as `jarvis dashboard`, but as a
+Runs the same dashboard+chat web server as `delphi dashboard`, but as a
 background daemon thread with a system tray icon (next to the clock/volume/
 network indicators) instead of a blocking terminal session: click the icon to
 open the dashboard or chat in your browser, or use its menu to quit.
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import threading
 
-from jarvis.config import JarvisConfig
+from delphi.config import DelphiConfig
 
 
 class TrayUnavailable(Exception):
@@ -23,17 +23,15 @@ class TrayUnavailable(Exception):
 
 
 def _build_icon_image():
-    from PIL import Image, ImageDraw
+    from pathlib import Path
 
-    size = 64
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    draw.ellipse((2, 2, size - 2, size - 2), fill=(37, 99, 235, 255))
-    draw.text((size // 2 - 6, size // 2 - 13), "J", fill="white")
-    return image
+    from PIL import Image
+
+    mark_path = Path(__file__).resolve().parent.parent / "assets" / "brand" / "delphi_mark.png"
+    return Image.open(mark_path).convert("RGBA").resize((64, 64), Image.LANCZOS)
 
 
-def run_tray(config: JarvisConfig, port: int = 8734) -> None:
+def run_tray(config: DelphiConfig, port: int = 8734) -> None:
     """Start the dashboard+chat server on a background daemon thread and block
     on the tray icon's event loop until "Quit" is chosen (which stops the icon;
     the daemon server thread then goes down with the process). Raises
@@ -41,7 +39,7 @@ def run_tray(config: JarvisConfig, port: int = 8734) -> None:
     try:
         import pystray
 
-        from jarvis.dashboard import create_app
+        from delphi.dashboard import create_app
 
         url = f"http://127.0.0.1:{port}"
         app = create_app(config)
@@ -71,7 +69,7 @@ def run_tray(config: JarvisConfig, port: int = 8734) -> None:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", _quit),
         )
-        icon = pystray.Icon("jarvis", _build_icon_image(), "Jarvis", menu)
+        icon = pystray.Icon("delphi", _build_icon_image(), "Delphi", menu)
     except Exception as e:
         raise TrayUnavailable(f"System tray isn't usable here: {e}") from e
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from jarvis.models import Tool
+from delphi.models import Tool
 
 
 def _require(input: dict, key: str) -> object:

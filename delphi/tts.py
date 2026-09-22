@@ -1,7 +1,7 @@
-"""Text-to-speech via Chatterbox (Resemble AI, MIT-licensed), for jarvis chat --speak.
+"""Text-to-speech via Chatterbox (Resemble AI, MIT-licensed), for delphi chat --speak.
 
 Disabled by default: the model is large (~1-2GB download on first use) and slow to
-run without a GPU. Enable with JARVIS_ENABLE_VOICE=1 plus the optional dependency
+run without a GPU. Enable with DELPHI_ENABLE_VOICE=1 plus the optional dependency
 (`pip install -e .[voice]`). The model itself downloads from Hugging Face on first
 use and is cached locally after that — see README.md "Voice output" for details.
 
@@ -20,9 +20,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from jarvis import settings as voice_settings
+from delphi import settings as voice_settings
 
-_ENABLE_ENV_VAR = "JARVIS_ENABLE_VOICE"
+_ENABLE_ENV_VAR = "DELPHI_ENABLE_VOICE"
 _model = None
 
 

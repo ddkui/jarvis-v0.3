@@ -2,8 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from jarvis.models import Note
-from jarvis.scheduler.jobs import ReminderStore, daily_digest
+from delphi.models import Note
+from delphi.scheduler.jobs import ReminderStore, daily_digest
 
 
 def _iso(dt: datetime) -> str:

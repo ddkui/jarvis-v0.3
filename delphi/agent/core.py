@@ -6,14 +6,14 @@ from typing import Callable
 
 import litellm
 
-from jarvis.agent.prompts import SYSTEM_PROMPT
-from jarvis.models import AgentAbort, Tool
+from delphi.agent.prompts import SYSTEM_PROMPT
+from delphi.models import AgentAbort, Tool
 
 _MAX_TOOL_ITERATIONS = 8
 _IMAGE_DATA_URL_PREFIX = "data:image/"
 
 
-class JarvisAgent:
+class DelphiAgent:
     """Wraps litellm's unified completion API with a manual agentic tool-use loop.
 
     The model string picks the provider via litellm's "<provider>/<model>" convention,
@@ -115,7 +115,7 @@ class JarvisAgent:
         litellm.exceptions.AuthenticationError if the active provider's API key is
         missing/invalid, and any other litellm API error its own retries could not
         resolve; callers should catch and present these to the user. Also raises
-        jarvis.models.AgentAbort if a tool handler requests an immediate stop (e.g. a
+        delphi.models.AgentAbort if a tool handler requests an immediate stop (e.g. a
         computer-use failsafe trip) — this propagates out unconditionally rather than
         becoming a tool error the model could act on again.
         """

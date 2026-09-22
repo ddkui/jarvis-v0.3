@@ -1,11 +1,11 @@
 """Long-term fact memory: short, durable facts about the user (name,
-preferences, ongoing context) that Jarvis remembers silently and carries into
-every future conversation - distinct from jarvis.memory.store, which is the
+preferences, ongoing context) that Delphi remembers silently and carries into
+every future conversation - distinct from delphi.memory.store, which is the
 searchable note-vault index you have to explicitly query.
 
-Stored as JSON at <vault_dir>/.jarvis/memory_facts.json. Capped at
+Stored as JSON at <vault_dir>/.delphi/memory_facts.json. Capped at
 _MAX_FACTS: past that, the oldest fact is dropped when a new one is added, so
-the system prompt these get folded into (see jarvis/agent/prompts.py) doesn't
+the system prompt these get folded into (see delphi/agent/prompts.py) doesn't
 grow without bound.
 """
 
@@ -28,7 +28,7 @@ class MemoryFact:
 
 
 def _facts_path(vault_dir: Path) -> Path:
-    return vault_dir / ".jarvis" / "memory_facts.json"
+    return vault_dir / ".delphi" / "memory_facts.json"
 
 
 def list_facts(vault_dir: Path) -> list[MemoryFact]:

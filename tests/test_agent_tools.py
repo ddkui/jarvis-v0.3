@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.memory.store import MemoryStore
-from jarvis.vault import Vault
-from jarvis.tools import calendar_tools, email_tools, memory_tools, notes_tools, reminder_tools
+from delphi.memory.store import MemoryStore
+from delphi.vault import Vault
+from delphi.tools import calendar_tools, email_tools, memory_tools, notes_tools, reminder_tools
 
 
 def _tools_by_name(tools):
@@ -88,7 +88,7 @@ def test_add_note_missing_required_field_raises(tmp_path: Path):
 
 
 def test_add_reminder_then_list_reminders(tmp_path: Path):
-    scheduler_jobs = pytest.importorskip("jarvis.scheduler.jobs")
+    scheduler_jobs = pytest.importorskip("delphi.scheduler.jobs")
     reminders = scheduler_jobs.ReminderStore(tmp_path / "reminders.db")
     tools = _tools_by_name(reminder_tools.build_tools(reminders))
 
@@ -113,7 +113,7 @@ def test_add_reminder_then_list_reminders(tmp_path: Path):
 
 
 def test_complete_reminder_missing_id(tmp_path: Path):
-    scheduler_jobs = pytest.importorskip("jarvis.scheduler.jobs")
+    scheduler_jobs = pytest.importorskip("delphi.scheduler.jobs")
     reminders = scheduler_jobs.ReminderStore(tmp_path / "reminders.db")
     tools = _tools_by_name(reminder_tools.build_tools(reminders))
 
