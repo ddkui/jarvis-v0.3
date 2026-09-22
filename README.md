@@ -87,6 +87,7 @@ jarvis note add --title "Trip idea" --content "Look into Portugal in spring" --t
 jarvis note list
 jarvis note search "portugal"
 jarvis note show <note_id>
+jarvis note delete <note_id>
 ```
 
 ### Reminders

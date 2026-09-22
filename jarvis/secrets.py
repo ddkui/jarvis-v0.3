@@ -29,7 +29,10 @@ def delete_secret(name: str) -> bool:
     try:
         keyring.delete_password(_SERVICE_NAME, name)
         return True
-    except keyring.errors.PasswordDeleteError:
+    except keyring.errors.KeyringError:
+        # Covers both "nothing stored under this name" (PasswordDeleteError) and
+        # "no keychain backend available at all" (NoKeyringError, a sibling class,
+        # not a PasswordDeleteError subclass) - both degrade to "nothing to remove".
         return False
 
 

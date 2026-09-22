@@ -177,6 +177,46 @@ def test_image_result_becomes_followup_image_message(monkeypatch):
     ]
 
 
+def test_agent_abort_mid_batch_leaves_valid_message_history(monkeypatch):
+    two_calls_stream = iter(
+        [
+            _chunk(tool_call=_tool_call_delta(0, call_id="call_safe", name="safe")),
+            _chunk(tool_call=_tool_call_delta(0, arguments="{}")),
+            _chunk(tool_call=_tool_call_delta(1, call_id="call_abort", name="click")),
+            _chunk(tool_call=_tool_call_delta(1, arguments="{}")),
+        ]
+    )
+    monkeypatch.setattr("jarvis.agent.core.litellm.completion", lambda **kwargs: two_calls_stream)
+
+    safe_tool = Tool(
+        name="safe",
+        description="Runs fine.",
+        input_schema={"type": "object", "properties": {}},
+        handler=lambda args: "safe ok",
+    )
+    click_tool = Tool(
+        name="click",
+        description="Clicks.",
+        input_schema={"type": "object", "properties": {}},
+        handler=lambda args: (_ for _ in ()).throw(AgentAbort("failsafe tripped")),
+    )
+    agent = JarvisAgent(model="anthropic/claude-opus-5", tools=[safe_tool, click_tool])
+
+    with pytest.raises(AgentAbort):
+        agent.send("do both things")
+
+    tool_call_ids_declared = {
+        tc["id"] for m in agent.messages if m.get("role") == "assistant" for tc in m.get("tool_calls", [])
+    }
+    tool_result_ids = {m["tool_call_id"] for m in agent.messages if m.get("role") == "tool"}
+    assert tool_call_ids_declared == {"call_safe", "call_abort"}
+    assert tool_result_ids == tool_call_ids_declared
+
+    results_by_id = {m["tool_call_id"]: m["content"] for m in agent.messages if m.get("role") == "tool"}
+    assert results_by_id["call_safe"] == "safe ok"
+    assert "Aborted" in results_by_id["call_abort"]
+
+
 def test_agent_abort_propagates_immediately(monkeypatch):
     monkeypatch.setattr(
         "jarvis.agent.core.litellm.completion",

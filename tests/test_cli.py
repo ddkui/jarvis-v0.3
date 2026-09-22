@@ -1,4 +1,13 @@
-from jarvis.cli import cmd_auth_delete, cmd_auth_list, cmd_auth_set, console, _summarize, build_parser
+from jarvis.cli import (
+    cmd_auth_delete,
+    cmd_auth_list,
+    cmd_auth_set,
+    cmd_note_add,
+    cmd_note_delete,
+    console,
+    _summarize,
+    build_parser,
+)
 
 
 def test_chat_command():
@@ -48,6 +57,36 @@ def test_note_show_command():
     assert args.command == "note"
     assert args.note_command == "show"
     assert args.note_id == "abc123"
+
+
+def test_note_delete_command():
+    args = build_parser().parse_args(["note", "delete", "abc123"])
+    assert args.command == "note"
+    assert args.note_command == "delete"
+    assert args.note_id == "abc123"
+
+
+def test_cmd_note_delete_removes_note_end_to_end(monkeypatch, tmp_path):
+    monkeypatch.setenv("JARVIS_VAULT_DIR", str(tmp_path / "vault"))
+    monkeypatch.delenv("JARVIS_DB_PATH", raising=False)
+
+    add_args = build_parser().parse_args(
+        ["note", "add", "--title", "Throwaway", "--content", "Delete me via CLI"]
+    )
+    cmd_note_add(add_args)
+
+    from jarvis.vault import Vault
+    from jarvis.config import load_config
+
+    config = load_config()
+    note_id = Vault(config.vault_dir).list_notes()[0].id
+
+    delete_args = build_parser().parse_args(["note", "delete", note_id])
+    assert cmd_note_delete(delete_args) == 0
+    assert Vault(config.vault_dir).list_notes() == []
+
+    missing_args = build_parser().parse_args(["note", "delete", "does-not-exist"])
+    assert cmd_note_delete(missing_args) == 1
 
 
 def test_remind_add_command():

@@ -55,6 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
     note_show = note_sub.add_parser("show", help="Show a single note.")
     note_show.add_argument("note_id")
 
+    note_delete = note_sub.add_parser("delete", help="Delete a note.")
+    note_delete.add_argument("note_id")
+
     remind_parser = subparsers.add_parser("remind", help="Manage reminders.")
     remind_sub = remind_parser.add_subparsers(dest="remind_command", required=True)
 
@@ -121,7 +124,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 tts.ensure_ready()
             speak_enabled = True
         except tts.VoiceUnavailable as e:
-            console.print(f"[yellow]Voice unavailable:[/yellow] {e} Continuing in text-only mode.")
+            console.print(f"[yellow]Voice unavailable:[/yellow] {escape(str(e))} Continuing in text-only mode.")
 
     try:
         agent = JarvisAgent(model=config.model, tools=tools, max_tool_iterations=max_tool_iterations)
@@ -149,7 +152,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
     except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
         console.print(
             f"[bold red]Jarvis couldn't authenticate[/bold red] with the API for model "
-            f"'{config.model}': {_summarize(e)}\n"
+            f"'{escape(config.model)}': {escape(_summarize(e))}\n"
             "If you haven't set an API key for this provider yet, run "
             f"[cyan]jarvis auth set {_key_env_var_hint(config.model)}[/cyan] or copy "
             ".env.example to .env — otherwise this may be a network issue reaching the provider."
@@ -157,7 +160,8 @@ def cmd_chat(args: argparse.Namespace) -> int:
         return 1
     except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
         console.print(
-            f"[bold red]Jarvis couldn't reach model[/bold red] '{config.model}': {_summarize(e)}\n"
+            f"[bold red]Jarvis couldn't reach model[/bold red] '{escape(config.model)}': "
+            f"{escape(_summarize(e))}\n"
             "Check JARVIS_MODEL uses a valid litellm provider prefix, e.g. "
             "anthropic/claude-opus-5, gemini/gemini-2.5-flash, deepseek/deepseek-chat, "
             "groq/llama-3.3-70b-versatile, ollama/llama3.1."
@@ -196,7 +200,7 @@ def _run_turn(agent, user_input: str, speak: bool = False) -> str:
 
     def on_tool_call(name: str) -> None:
         state["live"].stop()
-        console.print(f"[dim]→ using {name}[/dim]")
+        console.print(f"[dim]→ using {escape(name)}[/dim]")
         start_live()
 
     start_live()
@@ -213,7 +217,7 @@ def _run_turn(agent, user_input: str, speak: bool = False) -> str:
             with console.status("[dim]Generating voice...[/dim]"):
                 tts.speak(response)
         except tts.VoiceUnavailable as e:
-            console.print(f"[dim](voice failed: {e})[/dim]")
+            console.print(f"[dim](voice failed: {escape(str(e))})[/dim]")
 
     return response
 
@@ -226,9 +230,11 @@ def cmd_auth_set(args: argparse.Namespace) -> int:
     try:
         secrets.set_secret(args.name, value)
     except Exception as e:
-        console.print(f"[bold red]Couldn't store {args.name} in the OS keychain:[/bold red] {e}")
+        console.print(
+            f"[bold red]Couldn't store {escape(args.name)} in the OS keychain:[/bold red] {escape(str(e))}"
+        )
         return 1
-    console.print(f"Stored {args.name} in the OS keychain.")
+    console.print(f"Stored {escape(args.name)} in the OS keychain.")
     return 0
 
 
@@ -245,9 +251,9 @@ def cmd_auth_list(args: argparse.Namespace) -> int:
 
 def cmd_auth_delete(args: argparse.Namespace) -> int:
     if secrets.delete_secret(args.name):
-        console.print(f"Removed {args.name} from the OS keychain.")
+        console.print(f"Removed {escape(args.name)} from the OS keychain.")
         return 0
-    console.print(f"No stored value for {args.name}.")
+    console.print(f"No stored value for {escape(args.name)}.")
     return 1
 
 
@@ -257,7 +263,7 @@ def cmd_note_add(args: argparse.Namespace) -> int:
     store = MemoryStore(config.db_path)
     note = vault.create_note(args.title, args.content, tags=_parse_tags(args.tags))
     store.index_note(note)
-    print(f"Created note {note.id}: {note.title}")
+    console.print(f"Created note {note.id}: {escape(note.title)}")
     return 0
 
 
@@ -300,18 +306,36 @@ def cmd_note_show(args: argparse.Namespace) -> int:
     vault = Vault(config.vault_dir)
     note = vault.get_note(args.note_id)
     if note is None:
-        console.print(f"No note found with id {args.note_id}")
+        console.print(f"No note found with id {escape(args.note_id)}")
         return 1
     console.print(f"[bold]{escape(note.title)}[/bold]\n")
     console.print(Markdown(note.content))
     return 0
 
 
+def cmd_note_delete(args: argparse.Namespace) -> int:
+    config = load_config()
+    vault = Vault(config.vault_dir)
+    store = MemoryStore(config.db_path)
+    if not vault.delete_note(args.note_id):
+        console.print(f"No note found with id {escape(args.note_id)}")
+        return 1
+    store.remove_note(args.note_id)
+    console.print(f"Deleted note {escape(args.note_id)}")
+    return 0
+
+
 def cmd_remind_add(args: argparse.Namespace) -> int:
     config = load_config()
     reminders = ReminderStore(config.reminders_db_path)
-    reminder = reminders.add(args.text, args.due_at)
-    console.print(f"Added reminder {reminder.id}: {escape(reminder.text)} (due {reminder.due_at})")
+    try:
+        reminder = reminders.add(args.text, args.due_at)
+    except ValueError as e:
+        console.print(f"[bold red]{escape(str(e))}[/bold red]")
+        return 1
+    console.print(
+        f"Added reminder {reminder.id}: {escape(reminder.text)} (due {escape(reminder.due_at)})"
+    )
     return 0
 
 
@@ -329,7 +353,7 @@ def cmd_remind_list(args: argparse.Namespace) -> int:
     table.add_column("Due")
     for reminder in items:
         status = "[green]done[/green]" if reminder.done else "[yellow]pending[/yellow]"
-        table.add_row(reminder.id, status, escape(reminder.text), reminder.due_at)
+        table.add_row(reminder.id, status, escape(reminder.text), escape(reminder.due_at))
     console.print(table)
     return 0
 
@@ -339,9 +363,9 @@ def cmd_remind_done(args: argparse.Namespace) -> int:
     reminders = ReminderStore(config.reminders_db_path)
     ok = reminders.complete(args.reminder_id)
     if ok:
-        console.print(f"Marked {args.reminder_id} as done.")
+        console.print(f"Marked {escape(args.reminder_id)} as done.")
         return 0
-    console.print(f"No reminder found with id {args.reminder_id}")
+    console.print(f"No reminder found with id {escape(args.reminder_id)}")
     return 1
 
 
@@ -349,7 +373,7 @@ def cmd_digest(args: argparse.Namespace) -> int:
     config = load_config()
     vault = Vault(config.vault_dir)
     reminders = ReminderStore(config.reminders_db_path)
-    print(daily_digest(vault, reminders))
+    console.print(escape(daily_digest(vault, reminders)))
     return 0
 
 
@@ -368,6 +392,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_note_search(args)
         if args.note_command == "show":
             return cmd_note_show(args)
+        if args.note_command == "delete":
+            return cmd_note_delete(args)
     if args.command == "remind":
         if args.remind_command == "add":
             return cmd_remind_add(args)

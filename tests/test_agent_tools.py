@@ -25,6 +25,30 @@ def test_add_note_then_search_notes(tmp_path: Path):
     assert "Rocket Fuel Recipe" in search_result
 
 
+def test_delete_note_removes_from_vault_and_search_index(tmp_path: Path):
+    vault = Vault(tmp_path / "vault")
+    store = MemoryStore(tmp_path / "memory.db")
+    tools = _tools_by_name(notes_tools.build_tools(vault, store))
+
+    add_result = tools["add_note"].handler({"title": "Temporary Note", "content": "Delete me soon."})
+    note_id = add_result.split()[2].rstrip(":")
+
+    delete_result = tools["delete_note"].handler({"note_id": note_id})
+    assert "Deleted note" in delete_result
+
+    assert vault.get_note(note_id) is None
+    assert tools["search_notes"].handler({"query": "Delete me soon"}) == "No matching notes found."
+
+
+def test_delete_note_missing_id(tmp_path: Path):
+    vault = Vault(tmp_path / "vault")
+    store = MemoryStore(tmp_path / "memory.db")
+    tools = _tools_by_name(notes_tools.build_tools(vault, store))
+
+    result = tools["delete_note"].handler({"note_id": "does-not-exist"})
+    assert "no note found" in result.lower()
+
+
 def test_search_notes_no_match(tmp_path: Path):
     vault = Vault(tmp_path / "vault")
     store = MemoryStore(tmp_path / "memory.db")

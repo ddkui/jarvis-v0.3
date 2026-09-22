@@ -69,6 +69,15 @@ def test_delete_secret_returns_true_when_removed(monkeypatch):
     assert secrets.delete_secret("ANTHROPIC_API_KEY") is True
 
 
+def test_delete_secret_returns_false_when_no_backend_available(monkeypatch):
+    def _raise_no_backend(service, name):
+        raise keyring.errors.NoKeyringError("no backend available")
+
+    monkeypatch.setattr(secrets.keyring, "delete_password", _raise_no_backend)
+
+    assert secrets.delete_secret("ANTHROPIC_API_KEY") is False
+
+
 def test_apply_to_environ_fills_gaps_from_keychain(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     fake = _FakeKeyring()

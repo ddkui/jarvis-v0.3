@@ -31,6 +31,10 @@ class ReminderStore:
         self._conn.commit()
 
     def add(self, text: str, due_at: str) -> Reminder:
+        try:
+            _parse_iso(due_at)
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"due_at must be an ISO8601 date/time, got {due_at!r}") from e
         reminder = Reminder(id=uuid.uuid4().hex[:12], text=text, due_at=due_at, done=False)
         self._conn.execute(
             "INSERT INTO reminders (id, text, due_at, done) VALUES (?, ?, ?, ?)",

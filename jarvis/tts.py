@@ -20,6 +20,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from jarvis import settings as voice_settings
+
 _ENABLE_ENV_VAR = "JARVIS_ENABLE_VOICE"
 _model = None
 
@@ -64,11 +66,33 @@ def _strip_markdown(text: str) -> str:
     return text.strip()
 
 
-def synthesize(text: str, output_path: Path) -> Path:
+def _apply_speaking_rate(wav, rate: float):
+    if rate == 1.0:
+        return wav
+    import librosa
+    import numpy as np
+    import torch
+
+    wav_np = wav.detach().cpu().numpy() if hasattr(wav, "detach") else np.asarray(wav)
+    mono = wav_np.squeeze(0) if wav_np.ndim > 1 else wav_np
+    stretched = librosa.effects.time_stretch(mono.astype(np.float32), rate=rate)
+    return torch.from_numpy(stretched).unsqueeze(0)
+
+
+def synthesize(text: str, output_path: Path, vault_dir: Path) -> Path:
     import torchaudio as ta
 
     model = _load_model()
-    wav = model.generate(_strip_markdown(text))
+    settings = voice_settings.load_settings(vault_dir)
+    audio_prompt_path = settings.voices.get(settings.active_voice) if settings.active_voice else None
+
+    wav = model.generate(
+        _strip_markdown(text),
+        audio_prompt_path=audio_prompt_path,
+        exaggeration=settings.exaggeration,
+        cfg_weight=settings.cfg_weight,
+    )
+    wav = _apply_speaking_rate(wav, settings.speaking_rate)
     ta.save(str(output_path), wav, model.sr)
     return output_path
 
@@ -93,7 +117,7 @@ def _play(path: Path) -> None:
     )
 
 
-def speak(text: str) -> None:
+def speak(text: str, vault_dir: Path) -> None:
     """Synthesize text and play it. Raises VoiceUnavailable on any failure - callers
     should catch it and fall back to text rather than crashing the chat session."""
     if not text.strip():
@@ -102,11 +126,16 @@ def speak(text: str) -> None:
         path = Path(f.name)
     try:
         try:
-            synthesize(text, path)
+            synthesize(text, path, vault_dir)
         except VoiceUnavailable:
             raise
         except Exception as e:
             raise VoiceUnavailable(f"Voice synthesis failed: {e}") from e
-        _play(path)
+        try:
+            _play(path)
+        except VoiceUnavailable:
+            raise
+        except Exception as e:
+            raise VoiceUnavailable(f"Voice playback failed: {e}") from e
     finally:
         path.unlink(missing_ok=True)

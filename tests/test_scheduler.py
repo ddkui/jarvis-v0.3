@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from jarvis.models import Note
 from jarvis.scheduler.jobs import ReminderStore, daily_digest
 
@@ -33,6 +35,15 @@ def test_reminder_store_complete(tmp_path):
     everything = store.list(include_done=True)
     assert len(everything) == 1
     assert everything[0].done is True
+
+
+def test_reminder_store_add_rejects_non_iso_due_at(tmp_path):
+    store = ReminderStore(tmp_path / "reminders.db")
+
+    with pytest.raises(ValueError, match="ISO8601"):
+        store.add("Buy milk", "next Tuesday")
+
+    assert store.list() == []
 
 
 def test_reminder_store_due(tmp_path):

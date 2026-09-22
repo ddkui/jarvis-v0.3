@@ -44,6 +44,13 @@ def build_tools(vault: Vault, store: MemoryStore) -> list[Tool]:
         tags = ", ".join(note.tags) if note.tags else "none"
         return f"# {note.title}\ntags: {tags}\nupdated: {note.updated_at}\n\n{note.content}"
 
+    def delete_note(input: dict) -> str:
+        note_id = _require(input, "note_id")
+        if not vault.delete_note(note_id):
+            return f"No note found with id {note_id}"
+        store.remove_note(note_id)
+        return f"Deleted note {note_id}"
+
     return [
         Tool(
             name="search_notes",
@@ -108,5 +115,17 @@ def build_tools(vault: Vault, store: MemoryStore) -> list[Tool]:
                 "required": ["note_id"],
             },
             handler=get_note,
+        ),
+        Tool(
+            name="delete_note",
+            description="Permanently delete a note from the vault by id. This cannot be undone.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "note_id": {"type": "string", "description": "Note id"},
+                },
+                "required": ["note_id"],
+            },
+            handler=delete_note,
         ),
     ]

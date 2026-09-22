@@ -139,13 +139,29 @@ class JarvisAgent:
                 return message.content or ""
 
             image_urls = []
-            for call in tool_calls:
+            for i, call in enumerate(tool_calls):
                 if on_tool_call is not None:
                     on_tool_call(call.function.name)
                 try:
                     arguments = json.loads(call.function.arguments or "{}")
                     result_text = self._execute(call.function.name, arguments)
-                except AgentAbort:
+                except AgentAbort as abort:
+                    # Every tool_call in this turn needs a matching tool result before
+                    # any future turn, even the ones we're not going to run - otherwise
+                    # a caller that catches AgentAbort and resumes send() on this same
+                    # agent would send a malformed history (unmatched tool_calls) to
+                    # the provider.
+                    self.messages.append(
+                        {"role": "tool", "tool_call_id": call.id, "content": f"Aborted: {abort}"}
+                    )
+                    for remaining in tool_calls[i + 1 :]:
+                        self.messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": remaining.id,
+                                "content": "Not executed: agent aborted.",
+                            }
+                        )
                     raise
                 except Exception as e:
                     result_text = f"Error: {e}"
