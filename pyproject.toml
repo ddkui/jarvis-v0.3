@@ -24,6 +24,7 @@ computer-use = [
 ]
 voice = [
     "chatterbox-tts>=0.1.0",
+    "flask>=3.0",
 ]
 
 [project.scripts]
@@ -31,3 +32,6 @@ jarvis = "jarvis.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["jarvis*"]
+
+[tool.setuptools.package-data]
+jarvis = ["templates/*.html"]

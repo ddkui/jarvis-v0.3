@@ -84,6 +84,14 @@ def build_parser() -> argparse.ArgumentParser:
     auth_delete = auth_sub.add_parser("delete", help="Remove a stored key from the OS keychain.")
     auth_delete.add_argument("name")
 
+    dashboard_parser = subparsers.add_parser(
+        "dashboard", help="Open the local voice settings dashboard in your browser."
+    )
+    dashboard_parser.add_argument("--port", type=int, default=8734)
+    dashboard_parser.add_argument(
+        "--no-browser", action="store_true", help="Don't automatically open a browser tab."
+    )
+
     return parser
 
 
@@ -377,6 +385,29 @@ def cmd_digest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    try:
+        from jarvis.dashboard import run_dashboard
+    except ImportError as e:
+        console.print(
+            f"[bold red]Dashboard isn't available:[/bold red] {escape(str(e))}\n"
+            "Install the optional dependency: [cyan]pip install -e .[voice][/cyan]"
+        )
+        return 1
+
+    config = load_config()
+    console.print(
+        f"[bold cyan]Jarvis dashboard[/bold cyan] starting at "
+        f"http://127.0.0.1:{args.port} (local only — never exposed to the network)."
+    )
+    console.print("Press Ctrl-C to stop.")
+    try:
+        run_dashboard(config.vault_dir, port=args.port, open_browser=not args.no_browser)
+    except KeyboardInterrupt:
+        console.print("\nStopped.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -403,6 +434,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_remind_done(args)
     if args.command == "digest":
         return cmd_digest(args)
+    if args.command == "dashboard":
+        return cmd_dashboard(args)
     if args.command == "auth":
         if args.auth_command == "set":
             return cmd_auth_set(args)

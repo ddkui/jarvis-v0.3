@@ -79,11 +79,20 @@ def _apply_speaking_rate(wav, rate: float):
     return torch.from_numpy(stretched).unsqueeze(0)
 
 
-def synthesize(text: str, output_path: Path, vault_dir: Path) -> Path:
+def synthesize(
+    text: str,
+    output_path: Path,
+    vault_dir: Path,
+    settings: voice_settings.VoiceSettings | None = None,
+) -> Path:
+    """Synthesize text to output_path. Reads saved voice settings for vault_dir
+    unless an explicit `settings` override is given (used by the dashboard's
+    preview button to audition unsaved slider values without persisting them)."""
     import torchaudio as ta
 
     model = _load_model()
-    settings = voice_settings.load_settings(vault_dir)
+    if settings is None:
+        settings = voice_settings.load_settings(vault_dir)
     audio_prompt_path = settings.voices.get(settings.active_voice) if settings.active_voice else None
 
     wav = model.generate(

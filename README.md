@@ -178,3 +178,29 @@ it's a credible size/quality tradeoff among fully open options. Piper is the
 lighter-weight fallback if you'd rather avoid the torch dependency, at the
 cost of sounding more synthetic — swap it in via a different `jarvis/tts.py`
 backend if that trade makes more sense for your machine.
+
+### Voice settings dashboard
+
+```bash
+jarvis dashboard
+```
+
+Opens a small local web page (`http://127.0.0.1:8734`, bound to localhost
+only — never exposed to the network) for adjusting how the voice sounds,
+without editing files or restarting `jarvis chat`:
+
+- **Voice** — upload a short (few-second) reference audio clip and Chatterbox
+  clones that voice; pick which one is active, or use the built-in default.
+- **Intonation** — an expressiveness slider (Chatterbox's `exaggeration`
+  parameter) and a pace-adherence slider (`cfg_weight`).
+- **Speaking speed** — not a native Chatterbox parameter, so this is applied
+  as a post-processing time-stretch via `librosa`.
+- **Preview** — generates and plays a sample with your current (even
+  unsaved) slider positions, so you can hear a change before committing to it.
+
+Settings are stored at `<vault_dir>/.jarvis/voice_settings.json` and read by
+`jarvis chat --speak` on every turn — no restart needed. Requires the same
+`pip install -e .[voice]` as `--speak`; the dashboard itself also needs
+`flask` (included in that extra). It works even before `JARVIS_ENABLE_VOICE=1`
+is set, so you can configure everything ahead of time — the settings just
+won't audibly do anything until voice output is enabled.

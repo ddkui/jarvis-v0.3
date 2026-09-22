@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis — Voice Settings</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #1a1a1a;
+      background: #fafafa;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p.subtitle { color: #666; margin-top: 0; font-size: 0.9rem; }
+    fieldset {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      background: white;
+    }
+    legend { font-weight: 600; padding: 0 6px; }
+    label { display: block; margin: 14px 0 4px; font-size: 0.9rem; color: #444; }
+    input[type=range] { width: 100%; accent-color: #2563eb; }
+    .row { display: flex; justify-content: space-between; align-items: center; }
+    .value { font-variant-numeric: tabular-nums; color: #666; font-size: 0.85rem; }
+    select, input[type=text], input[type=file] {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 0.95rem;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: #f5f5f5;
+      cursor: pointer;
+      margin-top: 12px;
+      margin-right: 8px;
+      font-size: 0.9rem;
+    }
+    button.primary { background: #2563eb; color: white; border: none; }
+    button:hover { opacity: 0.9; }
+    #status { margin-top: 10px; font-size: 0.9rem; min-height: 1.2em; color: #444; }
+    .warn {
+      background: #fff8e1;
+      border: 1px solid #f0d060;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+    .voice-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; }
+    .voice-item button { margin: 0; padding: 4px 10px; font-size: 0.8rem; }
+    code { background: #eee; padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <h1>Jarvis — Voice Settings</h1>
+  <p class="subtitle">Changes here apply to <code>jarvis chat --speak</code> immediately — no restart needed.</p>
+
+  {% if not voice_available %}
+  <div class="warn">
+    Voice output isn't enabled yet. Set <code>JARVIS_ENABLE_VOICE=1</code> in <code>.env</code> and
+    install the optional dependency (<code>pip install -e .[voice]</code>) for these settings to take effect.
+    You can still configure them here — they just won't do anything until voice is enabled.
+  </div>
+  {% endif %}
+
+  <form id="settings-form">
+    <fieldset>
+      <legend>Voice</legend>
+      <label for="active_voice">Active voice</label>
+      <select name="active_voice" id="active_voice">
+        <option value="" {% if not settings.active_voice %}selected{% endif %}>Default (Chatterbox built-in)</option>
+        {% for name in settings.voices %}
+        <option value="{{ name }}" {% if settings.active_voice == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+
+      {% if settings.voices %}
+      <label>Manage voices</label>
+      {% for name in settings.voices %}
+      <div class="voice-item">
+        <span>{{ name }}</span>
+        <button type="button" onclick="deleteVoice('{{ name }}')">Remove</button>
+      </div>
+      {% endfor %}
+      {% endif %}
+    </fieldset>
+
+    <fieldset>
+      <legend>Intonation</legend>
+      <label>
+        <div class="row"><span>Expressiveness (exaggeration)</span><span class="value" id="exaggeration-value">{{ settings.exaggeration }}</span></div>
+        <input type="range" name="exaggeration" min="{{ exaggeration_range[0] }}" max="{{ exaggeration_range[1] }}" step="0.05"
+               value="{{ settings.exaggeration }}"
+               oninput="document.getElementById('exaggeration-value').textContent = this.value">
+      </label>
+      <label>
+        <div class="row"><span>Pace adherence (cfg weight)</span><span class="value" id="cfg-value">{{ settings.cfg_weight }}</span></div>
+        <input type="range" name="cfg_weight" min="{{ cfg_weight_range[0] }}" max="{{ cfg_weight_range[1] }}" step="0.05"
+               value="{{ settings.cfg_weight }}"
+               oninput="document.getElementById('cfg-value').textContent = this.value">
+      </label>
+      <label>
+        <div class="row"><span>Speaking speed</span><span class="value" id="speed-value">{{ settings.speaking_rate }}x</span></div>
+        <input type="range" name="speaking_rate" min="{{ speaking_rate_range[0] }}" max="{{ speaking_rate_range[1] }}" step="0.05"
+               value="{{ settings.speaking_rate }}"
+               oninput="document.getElementById('speed-value').textContent = this.value + 'x'">
+      </label>
+    </fieldset>
+
+    <button type="submit" class="primary">Save settings</button>
+    <button type="button" onclick="preview()">Preview voice</button>
+  </form>
+  <div id="status"></div>
+  <audio id="preview-audio" controls style="display:none; margin-top:10px; width:100%;"></audio>
+
+  <fieldset>
+    <legend>Add a voice</legend>
+    <form id="voice-form">
+      <label for="voice_name">Name</label>
+      <input type="text" name="name" id="voice_name" required>
+      <label for="voice_file">Reference audio clip (a few seconds of clean speech)</label>
+      <input type="file" name="file" id="voice_file" accept="audio/*" required>
+      <button type="submit" class="primary">Upload voice</button>
+    </form>
+  </fieldset>
+
+  <script>
+    const status = document.getElementById('status');
+
+    document.getElementById('settings-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/settings', { method: 'POST', body: new FormData(e.target) });
+      const data = await res.json().catch(() => ({}));
+      status.textContent = data.ok ? 'Saved.' : 'Failed to save: ' + (data.error || res.statusText);
+    });
+
+    document.getElementById('voice-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/voices', { method: 'POST', body: new FormData(e.target) });
+      const data = await res.json().catch(() => ({}));
+      status.textContent = data.ok ? 'Voice uploaded — reloading...' : ('Upload failed: ' + data.error);
+      if (data.ok) setTimeout(() => location.reload(), 600);
+    });
+
+    async function deleteVoice(name) {
+      if (!confirm(`Remove voice "${name}"?`)) return;
+      const res = await fetch(`/voices/${encodeURIComponent(name)}/delete`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      status.textContent = data.ok ? 'Removed — reloading...' : 'Failed to remove voice.';
+      if (data.ok) setTimeout(() => location.reload(), 600);
+    }
+
+    async function preview() {
+      status.textContent = 'Generating preview...';
+      const form = new FormData(document.getElementById('settings-form'));
+      const res = await fetch('/preview', { method: 'POST', body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        status.textContent = 'Preview failed: ' + (data.error || res.statusText);
+        return;
+      }
+      const blob = await res.blob();
+      const audio = document.getElementById('preview-audio');
+      audio.src = URL.createObjectURL(blob);
+      audio.style.display = 'block';
+      audio.play();
+      status.textContent = 'Preview ready.';
+    }
+  </script>
+</body>
+</html>

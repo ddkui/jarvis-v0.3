@@ -123,6 +123,19 @@ def test_digest_command():
     assert args.command == "digest"
 
 
+def test_dashboard_command_defaults():
+    args = build_parser().parse_args(["dashboard"])
+    assert args.command == "dashboard"
+    assert args.port == 8734
+    assert args.no_browser is False
+
+
+def test_dashboard_command_with_options():
+    args = build_parser().parse_args(["dashboard", "--port", "9000", "--no-browser"])
+    assert args.port == 9000
+    assert args.no_browser is True
+
+
 def test_no_command_raises():
     import pytest
 
