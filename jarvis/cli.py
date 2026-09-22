@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-import anthropic
+import litellm
 
 from jarvis.config import load_config
 from jarvis.memory.store import MemoryStore
@@ -93,10 +93,19 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 continue
             response = agent.send(user_input)
             print(f"jarvis> {response}")
-    except anthropic.AuthenticationError:
+    except litellm.exceptions.AuthenticationError:
         print(
-            "Jarvis couldn't authenticate with the Anthropic API. "
-            "Copy .env.example to .env and set ANTHROPIC_API_KEY."
+            f"Jarvis couldn't authenticate with the API for model '{config.model}'. "
+            "Copy .env.example to .env and set the API key for that provider "
+            "(e.g. ANTHROPIC_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY)."
+        )
+        return 1
+    except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
+        print(
+            f"Jarvis couldn't reach model '{config.model}': {e}\n"
+            "Check JARVIS_MODEL uses a valid litellm provider prefix, e.g. "
+            "anthropic/claude-opus-5, gemini/gemini-2.5-flash, deepseek/deepseek-chat, "
+            "groq/llama-3.3-70b-versatile, ollama/llama3.1."
         )
         return 1
 

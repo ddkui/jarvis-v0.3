@@ -10,12 +10,30 @@ digest of what's changed and what's due.
 Notes live as plain markdown files with YAML frontmatter in a local vault
 directory, and are indexed into a SQLite FTS5 table for fast keyword search;
 retrieval assembles the top matching snippets into context for the assistant.
-The assistant itself is a thin agentic loop over the Claude API (`anthropic`
-SDK) with tool use, wired up to tools for searching/adding notes and managing
+The assistant itself is a thin agentic loop over [litellm](https://docs.litellm.ai/),
+which routes to whichever model provider you configure (Claude, Gemini, DeepSeek,
+Groq-hosted open models, a local Ollama model, and more) behind one call shape,
+with tool use wired up to tools for searching/adding notes and managing
 reminders, plus calendar and email as stubbed extension points (they return no
 tools until you configure credentials for them, at which point they're meant
 to be filled in with a real integration). Reminders are stored separately in
 their own SQLite table, independent of the note vault.
+
+## Choosing a model
+
+Set `JARVIS_MODEL` to a litellm `<provider>/<model>` string, and set that
+provider's API key. A few starting points:
+
+| Provider | `JARVIS_MODEL` example | API key env var |
+|---|---|---|
+| Claude (default, most capable) | `anthropic/claude-opus-5` | `ANTHROPIC_API_KEY` |
+| Gemini Flash (cheap, fast) | `gemini/gemini-2.5-flash` | `GEMINI_API_KEY` |
+| DeepSeek | `deepseek/deepseek-chat` | `DEEPSEEK_API_KEY` |
+| Groq-hosted open models | `groq/llama-3.3-70b-versatile` | `GROQ_API_KEY` |
+| Local via Ollama (free, runs on your machine) | `ollama/llama3.1` | none — run `ollama serve` |
+
+Any [model litellm supports](https://docs.litellm.ai/docs/providers) works the
+same way — just set `JARVIS_MODEL` and the matching key in `.env`.
 
 ## Usage
 

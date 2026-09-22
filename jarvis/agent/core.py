@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import anthropic
+import json
+
+import litellm
 
 from jarvis.agent.prompts import SYSTEM_PROMPT
 from jarvis.models import Tool
@@ -9,86 +11,93 @@ _MAX_TOOL_ITERATIONS = 8
 
 
 class JarvisAgent:
-    """Wraps the Anthropic SDK with a manual agentic tool-use loop.
+    """Wraps litellm's unified completion API with a manual agentic tool-use loop.
 
-    Requires ANTHROPIC_API_KEY to be set in the environment. If it is not,
-    anthropic.AuthenticationError propagates out of send() unhandled; the CLI
-    layer is expected to catch it and print a friendly message pointing the
-    user at .env.example.
+    The model string picks the provider via litellm's "<provider>/<model>" convention,
+    e.g. "anthropic/claude-opus-5", "gemini/gemini-2.5-flash", "deepseek/deepseek-chat",
+    "groq/llama-3.3-70b-versatile", "ollama/llama3.1". litellm reads that provider's API
+    key from the environment (ANTHROPIC_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY,
+    GROQ_API_KEY; Ollama needs no key, just a local server) and normalizes tool-calling
+    and errors across all of them to the OpenAI-compatible shape used below.
+
+    If the configured provider's credentials are missing/invalid,
+    litellm.exceptions.AuthenticationError propagates out of send() unhandled; the CLI
+    layer is expected to catch it and print a friendly message.
     """
 
     def __init__(self, model: str, tools: list[Tool]) -> None:
         self.model = model
-        self._client = anthropic.Anthropic()
         self._tool_schemas = [
             {
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": tool.input_schema,
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.input_schema,
+                },
             }
             for tool in tools
         ]
         self._handlers = {tool.name: tool.handler for tool in tools}
-        self.messages: list = []
+        self.messages: list[dict] = []
 
-    def _execute(self, name: str, tool_input: dict) -> str:
+    def _execute(self, name: str, arguments: dict) -> str:
         handler = self._handlers.get(name)
         if handler is None:
             raise ValueError(f"unknown tool: {name}")
-        return handler(tool_input)
+        return handler(arguments)
 
     def send(self, user_message: str) -> str:
         """Send a user message and run the tool-use loop to completion.
 
-        Returns the concatenated text of the final assistant response. Raises
-        anthropic.AuthenticationError if ANTHROPIC_API_KEY is missing/invalid,
-        and any other anthropic API error that the SDK's own retries could not
+        Returns the assistant's final response text. Raises
+        litellm.exceptions.AuthenticationError if the active provider's API key is
+        missing/invalid, and any other litellm API error its own retries could not
         resolve; callers should catch and present these to the user.
         """
         self.messages.append({"role": "user", "content": user_message})
 
         for _ in range(_MAX_TOOL_ITERATIONS):
-            response = self._client.messages.create(
+            response = litellm.completion(
                 model=self.model,
-                max_tokens=4096,
-                system=SYSTEM_PROMPT,
-                tools=self._tool_schemas,
-                messages=self.messages,
-                thinking={"type": "adaptive"},
-                output_config={"effort": "medium"},
+                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + self.messages,
+                tools=self._tool_schemas or None,
             )
 
-            if response.stop_reason != "tool_use":
-                self.messages.append({"role": "assistant", "content": response.content})
-                return "".join(
-                    block.text for block in response.content if block.type == "text"
-                )
+            message = response.choices[0].message
+            tool_calls = message.tool_calls or []
 
-            tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
-            self.messages.append({"role": "assistant", "content": response.content})
+            assistant_message: dict = {"role": "assistant", "content": message.content or ""}
+            if tool_calls:
+                assistant_message["tool_calls"] = [
+                    {
+                        "id": call.id,
+                        "type": "function",
+                        "function": {
+                            "name": call.function.name,
+                            "arguments": call.function.arguments,
+                        },
+                    }
+                    for call in tool_calls
+                ]
+            self.messages.append(assistant_message)
 
-            tool_results = []
-            for block in tool_use_blocks:
+            if not tool_calls:
+                return message.content or ""
+
+            for call in tool_calls:
                 try:
-                    result_text = self._execute(block.name, block.input)
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": result_text,
-                        }
-                    )
+                    arguments = json.loads(call.function.arguments or "{}")
+                    result_text = self._execute(call.function.name, arguments)
                 except Exception as e:
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": str(e),
-                            "is_error": True,
-                        }
-                    )
-
-            self.messages.append({"role": "user", "content": tool_results})
+                    result_text = f"Error: {e}"
+                self.messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": result_text,
+                    }
+                )
 
         return (
             "I've gone through several tool calls without reaching an answer — "

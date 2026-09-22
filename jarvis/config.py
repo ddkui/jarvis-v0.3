@@ -32,7 +32,7 @@ class JarvisConfig:
 def load_config() -> JarvisConfig:
     _load_dotenv(REPO_ROOT / ".env")
 
-    model = os.environ.get("JARVIS_MODEL", "claude-opus-5")
+    model = os.environ.get("JARVIS_MODEL", "anthropic/claude-opus-5")
     vault_dir = Path(os.environ.get("JARVIS_VAULT_DIR", "./vault"))
     default_db_path = vault_dir / ".jarvis" / "memory.db"
     db_path = Path(os.environ.get("JARVIS_DB_PATH", str(default_db_path)))
