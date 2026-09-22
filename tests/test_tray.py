@@ -109,6 +109,31 @@ def test_run_tray_builds_menu_and_runs_icon_event_loop(monkeypatch, tmp_path):
     assert "Quit" in menu_texts
 
 
+def test_run_tray_starts_the_wake_word_listener(monkeypatch, tmp_path):
+    fake_pystray = types.ModuleType("pystray")
+    fake_pystray.MenuItem = lambda *a, **k: None
+
+    class FakeMenu:
+        SEPARATOR = object()
+
+        def __init__(self, *a, **k):
+            pass
+
+    fake_pystray.Menu = FakeMenu
+    fake_pystray.Icon = lambda *a, **k: types.SimpleNamespace(run=lambda: None)
+    monkeypatch.setitem(sys.modules, "pystray", fake_pystray)
+    monkeypatch.setattr("delphi.dashboard.create_app", lambda config: types.SimpleNamespace(run=lambda **k: None))
+    monkeypatch.setattr(tray.threading.Thread, "start", lambda self: None)
+
+    started_with = {}
+    monkeypatch.setattr(tray.listen, "run_background", lambda config: started_with.setdefault("config", config))
+
+    config = _config(tmp_path)
+    tray.run_tray(config, port=18736)
+
+    assert started_with["config"] is config
+
+
 def test_run_tray_wraps_unexpected_setup_errors(monkeypatch, tmp_path):
     fake_pystray = types.ModuleType("pystray")
     fake_pystray.MenuItem = lambda *a, **k: None

@@ -362,6 +362,77 @@ systemd user service on Linux, a Login Item on macOS, Task Scheduler on
 Windows) is a reasonable follow-up if you want Delphi always running in the
 background without launching it yourself each time.
 
+**Windows: a silent (no console window) desktop shortcut** — `delphi tray`
+launched normally still opens a console window, since `delphi.exe` (the
+pip-installed launcher) is tied to `python.exe`. To get a double-clickable
+icon with no visible window at all (only the tray icon), launch via
+`pythonw.exe` instead, wrapped in a `.vbs` file so it also runs fully
+detached from the shell that starts it:
+
+```powershell
+@"
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "cmd /c cd /d ""<repo-path>"" && "".venv\Scripts\pythonw.exe"" -m delphi.cli tray > ""<repo-path>\delphi-tray.log"" 2>&1", 0, False
+"@ | Set-Content -Path "<repo-path>\start-delphi.vbs" -Encoding ASCII
+```
+
+(replace both `<repo-path>` with your actual install path). Point a Desktop
+shortcut's target at that `.vbs` file instead of a `.bat`/`delphi tray`
+directly — double-clicking it then launches with no window at all, and
+anything that would normally print to the console goes to
+`delphi-tray.log` instead (useful for troubleshooting, since you won't see
+console output otherwise).
+
+## Wake-word voice input (off by default)
+
+`delphi tray` can also listen for you to say its name and respond hands-free,
+Siri/Alexa-style — say "Delphi" followed by a command (or just "Delphi" on
+its own, then say the command after it acknowledges):
+
+1. Install the optional dependency: `pip install -e .[listen]`.
+2. Set `DELPHI_ENABLE_WAKE_WORD=1` in `.env`.
+3. Launch (or relaunch) `delphi tray`.
+
+Commands go through the exact same agent and persisted conversation as
+`delphi chat` and the dashboard, and replies are spoken back if
+`DELPHI_ENABLE_VOICE=1` is also set (otherwise they're just applied silently
+— check the dashboard or `delphi chat` to see the reply text).
+
+**Why there's no dedicated wake-word model**: engines like openWakeWord or
+Picovoice Porcupine only ship pretrained models for a fixed set of words
+(`alexa`, `hey jarvis`, etc.) — training a custom one for an arbitrary word
+like "Delphi" needs an external one-time step (synthetic training data
+generation, typically via a Colab notebook). To avoid that setup burden,
+Delphi instead uses a different, zero-training approach: a lightweight
+voice-activity detector (`webrtcvad`) segments your microphone stream into
+utterances, each one is transcribed locally with Whisper
+(`faster-whisper`, GPU-accelerated the same way voice output is if you set
+that up — see "Speeding it up with a GPU" above), and the transcript is
+checked for the wake word. This uses more CPU/GPU per utterance than a
+dedicated wake-word model would (every utterance gets transcribed, not just
+ones that start with "Delphi"), but works immediately with the literal word
+"Delphi" and needs no extra setup or external training step.
+
+**Privacy**: this only runs when you explicitly enable it. Nothing is sent
+over the network until the wake word is actually heard and a command
+follows — transcription happens fully locally. Utterances that don't contain
+the wake word (and aren't a follow-up to a bare "Delphi") are discarded, not
+logged or transmitted.
+
+Tunable via `.env`:
+
+- `DELPHI_WAKE_WORD` (default `delphi`) — the trigger word/phrase to listen
+  for, case-insensitive.
+- `DELPHI_WHISPER_MODEL` (default `small.en`) — any
+  [faster-whisper model name](https://github.com/SYSTRAN/faster-whisper);
+  smaller (`tiny.en`, `base.en`) is faster and lighter but less accurate,
+  larger (`medium.en`) is the reverse. Only matters if you don't have a GPU —
+  with one, even `small.en` transcribes each command in well under a second.
+
+Only `delphi tray` runs the listener — `delphi chat` and `delphi dashboard`
+don't, since they're meant to be run in a foreground terminal you're already
+looking at.
+
 ## Auto-update (on by default)
 
 Delphi checks the git remote for new commits to itself and updates

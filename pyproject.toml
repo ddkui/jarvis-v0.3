@@ -36,6 +36,11 @@ tray = [
     "pillow>=10.0",
     "flask>=3.0",
 ]
+listen = [
+    "sounddevice>=0.4",
+    "webrtcvad>=2.0.10",
+    "faster-whisper>=1.0",
+]
 
 [project.scripts]
 delphi = "delphi.cli:main"
