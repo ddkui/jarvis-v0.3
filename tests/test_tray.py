@@ -16,6 +16,15 @@ def _config(tmp_path):
     )
 
 
+@pytest.fixture(autouse=True)
+def _no_autoupdate(monkeypatch):
+    # run_tray checks for updates (a real git fetch) and starts a background
+    # poller on every call - keep tests hermetic and fast by stubbing both out;
+    # autoupdate itself is covered by tests/test_autoupdate.py.
+    monkeypatch.setattr(tray.autoupdate, "check_once_and_restart_if_updated", lambda: None)
+    monkeypatch.setattr(tray.autoupdate, "run_background", lambda: None)
+
+
 def test_run_tray_raises_when_pystray_unavailable_for_real(tmp_path):
     # No mocking here: this sandbox genuinely has no display, so importing
     # pystray really does fail - the same way it would on any headless box.

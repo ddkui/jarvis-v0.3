@@ -109,6 +109,10 @@ def build_parser() -> argparse.ArgumentParser:
         "install-launcher", help="Add Delphi to your application launcher (Linux only)."
     )
 
+    subparsers.add_parser(
+        "update", help="Check the git remote for updates to Delphi itself and restart into them if found."
+    )
+
     return parser
 
 
@@ -118,10 +122,19 @@ def _parse_tags(raw: str | None) -> list[str]:
     return [tag.strip() for tag in raw.split(",") if tag.strip()]
 
 
+_CODE_TOOL_NAMES = {"run_python", "run_shell", "read_file", "write_file", "list_dir"}
+
+
 def cmd_chat(args: argparse.Namespace) -> int:
+    from delphi import autoupdate
+
+    autoupdate.check_once_and_restart_if_updated()
+
     config = load_config()
     _vault, _store, _reminders, tools = runtime.build_agent_stack(config)
     computer_use_active = any(tool.name.startswith("computer_") for tool in tools)
+    code_active = any(tool.name in _CODE_TOOL_NAMES for tool in tools)
+    self_update_active = any(tool.name == "apply_pending_changes" for tool in tools)
 
     if args.new:
         from delphi import conversation
@@ -147,6 +160,17 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 "[yellow]Computer-use tools are active[/yellow]: Delphi can see the screen "
                 "and control the mouse/keyboard on this machine. Drag the mouse to any "
                 "screen corner at any time to hard-stop it."
+            )
+        if code_active:
+            console.print(
+                "[yellow]Code tools are active[/yellow]: Delphi can run Python/shell commands "
+                "and read/write files in this working directory."
+            )
+        if self_update_active:
+            console.print(
+                "[yellow]Self-update tools are active[/yellow]: Delphi can propose changes to "
+                "its own source code. It will always show you the diff and test results and "
+                "wait for you to say go before applying and restarting."
             )
         while True:
             try:
@@ -469,6 +493,19 @@ def cmd_tray(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_update(args: argparse.Namespace) -> int:
+    from delphi import autoupdate
+
+    console.print("Checking for updates...")
+    if autoupdate.check_and_pull():
+        console.print("[green]Update found — restarting into the new code.[/green]")
+        import os
+
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    console.print("Already up to date.")
+    return 0
+
+
 def cmd_install_launcher(args: argparse.Namespace) -> int:
     from delphi.launcher import install_launcher
 
@@ -519,6 +556,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_tray(args)
     if args.command == "install-launcher":
         return cmd_install_launcher(args)
+    if args.command == "update":
+        return cmd_update(args)
     if args.command == "auth":
         if args.auth_command == "set":
             return cmd_auth_set(args)

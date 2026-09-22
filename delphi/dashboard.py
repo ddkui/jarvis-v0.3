@@ -196,6 +196,11 @@ def run_dashboard(config: DelphiConfig, port: int = 8734, open_browser: bool = T
     import threading
     import webbrowser
 
+    from delphi import autoupdate
+
+    autoupdate.check_once_and_restart_if_updated()
+    autoupdate.run_background()
+
     app = create_app(config)
     url = f"http://127.0.0.1:{port}"
     if open_browser:

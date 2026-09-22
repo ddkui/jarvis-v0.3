@@ -196,6 +196,33 @@ def test_install_launcher_command():
     assert args.command == "install-launcher"
 
 
+def test_update_command():
+    args = build_parser().parse_args(["update"])
+    assert args.command == "update"
+
+
+def test_cmd_update_reports_up_to_date(monkeypatch, capsys):
+    from delphi.cli import cmd_update
+
+    monkeypatch.setattr("delphi.autoupdate.check_and_pull", lambda: False)
+
+    assert cmd_update(build_parser().parse_args(["update"])) == 0
+    assert "Already up to date." in capsys.readouterr().out
+
+
+def test_cmd_update_restarts_when_update_found(monkeypatch, capsys):
+    from delphi.cli import cmd_update
+
+    monkeypatch.setattr("delphi.autoupdate.check_and_pull", lambda: True)
+    execv_calls = []
+    monkeypatch.setattr("os.execv", lambda *a: execv_calls.append(a))
+
+    cmd_update(build_parser().parse_args(["update"]))
+
+    assert execv_calls
+    assert "restarting" in capsys.readouterr().out.lower()
+
+
 def test_no_command_raises():
     import pytest
 

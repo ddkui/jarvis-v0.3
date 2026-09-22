@@ -9,10 +9,40 @@ from __future__ import annotations
 from delphi.config import DelphiConfig
 from delphi.memory.store import MemoryStore
 from delphi.scheduler.jobs import ReminderStore
-from delphi.tools import calendar_tools, computer_tools, email_tools, memory_tools, notes_tools, reminder_tools
+from delphi.tools import (
+    calendar_tools,
+    code_tools,
+    computer_tools,
+    email_tools,
+    memory_tools,
+    notes_tools,
+    reminder_tools,
+    self_update_tools,
+)
 from delphi.vault import Vault
 
 COMPUTER_USE_MAX_TOOL_ITERATIONS = 25
+
+# Multi-step tool families (computer-use, coding, self-update) get a higher
+# tool-iteration budget than the default - a coding task might reasonably
+# read a file, edit it, and run tests across several tool calls in one turn.
+# Matched by exact name (not just prefix) to avoid colliding with unrelated
+# tools like list_notes/list_reminders/list_memory, which stay at the default.
+_EXTENDED_ITERATION_TOOL_PREFIXES = ("computer_",)
+_EXTENDED_ITERATION_TOOL_NAMES = {
+    "run_python",
+    "run_shell",
+    "read_file",
+    "write_file",
+    "list_dir",
+    "read_own_file",
+    "write_own_file",
+    "list_own_dir",
+    "view_pending_changes",
+    "run_own_tests",
+    "discard_pending_changes",
+    "apply_pending_changes",
+}
 
 
 def build_agent_stack(config: DelphiConfig):
@@ -27,6 +57,8 @@ def build_agent_stack(config: DelphiConfig):
     tools.extend(calendar_tools.build_tools())
     tools.extend(email_tools.build_tools())
     tools.extend(computer_tools.build_tools())
+    tools.extend(code_tools.build_tools())
+    tools.extend(self_update_tools.build_tools())
 
     return vault, store, reminders, tools
 
@@ -34,8 +66,11 @@ def build_agent_stack(config: DelphiConfig):
 def max_tool_iterations_for(tools) -> int:
     from delphi.agent.core import _MAX_TOOL_ITERATIONS
 
-    computer_use_active = any(tool.name.startswith("computer_") for tool in tools)
-    return COMPUTER_USE_MAX_TOOL_ITERATIONS if computer_use_active else _MAX_TOOL_ITERATIONS
+    extended_active = any(
+        tool.name.startswith(_EXTENDED_ITERATION_TOOL_PREFIXES) or tool.name in _EXTENDED_ITERATION_TOOL_NAMES
+        for tool in tools
+    )
+    return COMPUTER_USE_MAX_TOOL_ITERATIONS if extended_active else _MAX_TOOL_ITERATIONS
 
 
 def build_agent(config: DelphiConfig, resume: bool = True):

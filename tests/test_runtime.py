@@ -37,6 +37,55 @@ def test_max_tool_iterations_raised_with_computer_use(tmp_path):
     assert runtime.max_tool_iterations_for(tools) == runtime.COMPUTER_USE_MAX_TOOL_ITERATIONS
 
 
+def test_max_tool_iterations_raised_with_code_tools(tmp_path):
+    from delphi.models import Tool
+
+    tools = [
+        Tool(name="run_python", description="", input_schema={"type": "object", "properties": {}}, handler=lambda a: "")
+    ]
+    assert runtime.max_tool_iterations_for(tools) == runtime.COMPUTER_USE_MAX_TOOL_ITERATIONS
+
+
+def test_max_tool_iterations_raised_with_self_update_tools(tmp_path):
+    from delphi.models import Tool
+
+    tools = [
+        Tool(name="apply_pending_changes", description="", input_schema={"type": "object", "properties": {}}, handler=lambda a: "")
+    ]
+    assert runtime.max_tool_iterations_for(tools) == runtime.COMPUTER_USE_MAX_TOOL_ITERATIONS
+
+
+def test_max_tool_iterations_not_raised_by_unrelated_list_tools(tmp_path):
+    # list_notes/list_reminders/list_memory happen to share the "list_" prefix
+    # with the new list_dir/list_own_dir tools - they must not trip the raised budget.
+    _vault, _store, _reminders, tools = runtime.build_agent_stack(_config(tmp_path))
+    assert {"list_notes", "list_reminders", "list_memory"} <= {t.name for t in tools}
+    assert runtime.max_tool_iterations_for(tools) == _MAX_TOOL_ITERATIONS
+
+
+def test_build_agent_stack_omits_code_and_self_update_tools_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("DELPHI_ENABLE_CODE", raising=False)
+    monkeypatch.delenv("DELPHI_ENABLE_SELF_UPDATE", raising=False)
+    _vault, _store, _reminders, tools = runtime.build_agent_stack(_config(tmp_path))
+    names = {t.name for t in tools}
+    assert "run_python" not in names
+    assert "apply_pending_changes" not in names
+
+
+def test_build_agent_stack_includes_code_tools_when_enabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("DELPHI_ENABLE_CODE", "1")
+    _vault, _store, _reminders, tools = runtime.build_agent_stack(_config(tmp_path))
+    names = {t.name for t in tools}
+    assert {"run_python", "run_shell", "read_file", "write_file", "list_dir"} <= names
+
+
+def test_build_agent_stack_includes_self_update_tools_when_enabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("DELPHI_ENABLE_SELF_UPDATE", "1")
+    _vault, _store, _reminders, tools = runtime.build_agent_stack(_config(tmp_path))
+    names = {t.name for t in tools}
+    assert {"view_pending_changes", "run_own_tests", "apply_pending_changes"} <= names
+
+
 def test_build_agent_constructs_delphi_agent(tmp_path):
     from delphi.agent.core import DelphiAgent
 

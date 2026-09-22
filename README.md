@@ -171,6 +171,56 @@ failsafe. If you want a confirmation step before each action instead, that's
 a reasonable follow-up change to `delphi/agent/core.py`'s tool-execution
 loop.
 
+## Writing & running code (off by default)
+
+Delphi can run Python and shell commands and read/write files, scoped to a
+working directory — useful for scripts, data work, automation, and coding on
+an existing project. This is real, unconfirmed code execution: a wrong shell
+command can delete or overwrite real files. It's off unless you turn it on:
+
+1. Set `DELPHI_ENABLE_CODE=1` in `.env`.
+2. Optionally set `DELPHI_CODE_DIR=/path/to/a/project` to point it at a
+   specific project; if unset, it's scoped to whatever directory you ran
+   `delphi` from (so `cd your-project && delphi chat` is the normal way to
+   use this for a coding session).
+
+Tools: `run_python`, `run_shell`, `read_file`, `write_file`, `list_dir`. All
+file/shell access is confined to the scoped directory — a path that resolves
+outside it is rejected before anything touches disk — and every command run
+is logged to the terminal as it happens, the same as computer-use. Commands
+time out after 60s and their output is truncated if huge, so a runaway
+command can't hang the conversation.
+
+## Self-improvement (off by default)
+
+Separately from the general code tools above, Delphi can read, edit, test,
+and — only on your explicit approval — commit and restart itself into
+changes to its own source code (this repository). It's off unless you turn
+it on:
+
+```bash
+# DELPHI_ENABLE_SELF_UPDATE=1 in .env
+```
+
+Tools: `read_own_file`, `write_own_file`, `list_own_dir`,
+`view_pending_changes`, `run_own_tests`, `discard_pending_changes`,
+`apply_pending_changes` — all scoped to this repo specifically, independent
+of `DELPHI_CODE_DIR`. The flow is a hard two-step gate, not a formality:
+
+1. Delphi edits files (working tree only, nothing committed), then shows you
+   `view_pending_changes` (the diff) and `run_own_tests` (pass/fail).
+2. Only when you explicitly say to proceed does it call
+   `apply_pending_changes` — which **independently re-runs the full test
+   suite itself** and refuses to commit or restart on a single failing test,
+   regardless of what the model believes about its own change. If it passes,
+   it commits and restarts the running process into the new code.
+
+The system prompt also instructs the model to never call
+`apply_pending_changes` in the same turn it made the edits — there should
+always be a real message from you between "here's the diff" and "apply it."
+If you don't like a pending change, ask it to keep iterating, or say
+"discard it" to call `discard_pending_changes` and reset to the last commit.
+
 ## Voice output (off by default)
 
 `delphi chat --speak` also speaks each response aloud, using
@@ -271,3 +321,27 @@ launched once, by hand or from the launcher entry above. Auto-start (a
 systemd user service on Linux, a Login Item on macOS, Task Scheduler on
 Windows) is a reasonable follow-up if you want Delphi always running in the
 background without launching it yourself each time.
+
+## Auto-update (on by default)
+
+Delphi checks the git remote for new commits to itself and updates
+automatically — `delphi tray` and `delphi dashboard` poll for it hourly in
+the background (`DELPHI_AUTOUPDATE_INTERVAL`, seconds), and `delphi chat`
+checks once at startup. When an update is found, it fast-forwards
+(`git fetch` + `git merge --ff-only`) and restarts the running process into
+the new code automatically, no prompt.
+
+It's conservative about when it acts: it only ever fast-forwards, and only
+when the working tree is clean. If there are uncommitted local changes (for
+example a pending self-update you haven't applied yet) or local history has
+diverged from the remote, it silently skips the check rather than risk
+discarding or conflicting with anything — it is not a merge tool. Set
+`DELPHI_ENABLE_AUTOUPDATE=0` in `.env` if you'd rather update by hand; you can
+still trigger a one-off check anytime with:
+
+```bash
+delphi update
+```
+
+This runs the same fast-forward-only check immediately (regardless of the
+`DELPHI_ENABLE_AUTOUPDATE` setting) and restarts if it finds one.
