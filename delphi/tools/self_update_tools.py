@@ -70,8 +70,12 @@ def _run_tests() -> tuple[bool, str]:
 
 
 def _restart() -> None:
+    # Re-exec via `-m delphi.cli` rather than replaying sys.argv[0] directly:
+    # on Windows, pip's console-script wrapper leaves sys.argv[0] as something
+    # like "...\Scripts\delphi" with no extension, which python.exe can't open
+    # as a script (WinError 2) - re-invoking the module is portable everywhere.
     _log("restarting into the new code...")
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+    os.execv(sys.executable, [sys.executable, "-m", "delphi.cli", *sys.argv[1:]])
 
 
 def build_tools() -> list[Tool]:

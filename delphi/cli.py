@@ -499,9 +499,7 @@ def cmd_update(args: argparse.Namespace) -> int:
     console.print("Checking for updates...")
     if autoupdate.check_and_pull():
         console.print("[green]Update found — restarting into the new code.[/green]")
-        import os
-
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        autoupdate._restart()
     console.print("Already up to date.")
     return 0
 

@@ -171,3 +171,19 @@ def test_interval_seconds_clamped_to_minimum(monkeypatch):
 def test_interval_seconds_falls_back_on_garbage(monkeypatch):
     monkeypatch.setenv("DELPHI_AUTOUPDATE_INTERVAL", "not-a-number")
     assert autoupdate._interval_seconds() == autoupdate._DEFAULT_INTERVAL_SECONDS
+
+
+def test_restart_reexecs_via_module_not_argv0(monkeypatch):
+    # Regression: on Windows, pip's console-script wrapper leaves sys.argv[0]
+    # as something like "...\Scripts\delphi" with no extension - python.exe
+    # can't open that as a script (WinError 2). Restart must go through
+    # `-m delphi.cli` with the real args, never replay sys.argv[0] directly.
+    monkeypatch.setattr(autoupdate.sys, "argv", ["C:\\weird\\path\\delphi", "tray", "--port", "9000"])
+    calls = []
+    monkeypatch.setattr(autoupdate.os, "execv", lambda *a: calls.append(a))
+
+    autoupdate._restart()
+
+    assert calls == [
+        (autoupdate.sys.executable, [autoupdate.sys.executable, "-m", "delphi.cli", "tray", "--port", "9000"])
+    ]

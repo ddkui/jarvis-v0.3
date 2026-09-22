@@ -203,3 +203,19 @@ def test_run_tests_integration_reports_failure(repo):
     (repo / "test_trivial.py").write_text("def test_bad():\n    assert False\n")
     ok, _output = self_update_tools._run_tests()
     assert ok is False
+
+
+def test_restart_reexecs_via_module_not_argv0(monkeypatch):
+    # Regression: on Windows, pip's console-script wrapper leaves sys.argv[0]
+    # as something like "...\Scripts\delphi" with no extension - python.exe
+    # can't open that as a script (WinError 2). Restart must go through
+    # `-m delphi.cli` with the real args, never replay sys.argv[0] directly.
+    monkeypatch.setattr(self_update_tools.sys, "argv", ["C:\\weird\\path\\delphi", "chat"])
+    calls = []
+    monkeypatch.setattr(self_update_tools.os, "execv", lambda *a: calls.append(a))
+
+    self_update_tools._restart()
+
+    assert calls == [
+        (self_update_tools.sys.executable, [self_update_tools.sys.executable, "-m", "delphi.cli", "chat"])
+    ]
