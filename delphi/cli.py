@@ -129,7 +129,19 @@ _CODE_TOOL_NAMES = {"run_python", "run_shell", "read_file", "write_file", "list_
 def cmd_chat(args: argparse.Namespace) -> int:
     from delphi import autoupdate
 
-    autoupdate.check_once_and_restart_if_updated()
+    # Deliberately pull-and-exit here rather than autoupdate's usual
+    # pull-and-restart-in-place: chat is about to enter a long interactive
+    # console.input() loop, and on Windows an os.execv restart doesn't hand
+    # the console off cleanly to a process that then reads stdin - keystrokes
+    # can end up delivered to the shell instead of Delphi. tray/dashboard
+    # don't have this problem (no interactive console input loop), so they
+    # still use the normal restart-in-place path.
+    if autoupdate.is_enabled() and autoupdate.check_and_pull():
+        console.print(
+            "[green]Delphi was updated to the latest code.[/green] Run [cyan]delphi chat[/cyan] "
+            "again to use it."
+        )
+        return 0
 
     config = load_config()
     _vault, _store, _reminders, tools = runtime.build_agent_stack(config)

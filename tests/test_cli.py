@@ -350,6 +350,24 @@ def test_new_flag_clears_persisted_conversation(tmp_path):
     assert fresh_agent.messages == []
 
 
+def test_cmd_chat_exits_cleanly_instead_of_restarting_when_update_found(monkeypatch, capsys):
+    # Regression: cmd_chat used to call the shared pull-and-restart-in-place
+    # helper (os.execv) before entering its interactive input loop. On Windows,
+    # that doesn't hand the console off cleanly to a process that then reads
+    # stdin interactively - keystrokes can land on the shell instead of Delphi.
+    # cmd_chat must pull-and-exit instead, and never call _restart() itself.
+    monkeypatch.setattr("delphi.autoupdate.is_enabled", lambda: True)
+    monkeypatch.setattr("delphi.autoupdate.check_and_pull", lambda: True)
+    restart_calls = []
+    monkeypatch.setattr("delphi.autoupdate._restart", lambda: restart_calls.append(True))
+
+    result = cmd_chat(build_parser().parse_args(["chat"]))
+
+    assert result == 0
+    assert restart_calls == []
+    assert "updated" in capsys.readouterr().out.lower()
+
+
 def test_cmd_chat_survives_a_transient_model_error_and_keeps_chatting(monkeypatch, tmp_path, capsys):
     # Regression: a mid-stream provider hiccup (e.g. litellm.MidStreamFallbackError
     # from a 503 "model overloaded") used to propagate all the way out of cmd_chat
@@ -364,7 +382,7 @@ def test_cmd_chat_survives_a_transient_model_error_and_keeps_chatting(monkeypatc
         reminders_db_path=tmp_path / ".delphi" / "reminders.db",
     )
     monkeypatch.setattr("delphi.cli.load_config", lambda: config)
-    monkeypatch.setattr("delphi.autoupdate.check_once_and_restart_if_updated", lambda: None)
+    monkeypatch.setattr("delphi.autoupdate.check_and_pull", lambda: False)
 
     class _FlakyAgent:
         def __init__(self):

@@ -344,8 +344,13 @@ Delphi checks the git remote for new commits to itself and updates
 automatically — `delphi tray` and `delphi dashboard` poll for it hourly in
 the background (`DELPHI_AUTOUPDATE_INTERVAL`, seconds), and `delphi chat`
 checks once at startup. When an update is found, it fast-forwards
-(`git fetch` + `git merge --ff-only`) and restarts the running process into
-the new code automatically, no prompt.
+(`git fetch` + `git merge --ff-only`). `tray`/`dashboard` then restart the
+running process into the new code automatically, no prompt - `delphi chat`
+deliberately does not: it pulls, tells you to relaunch, and exits, rather
+than restarting itself right before opening an interactive input loop. An
+`os.execv` restart doesn't hand the console off cleanly to a process that
+then reads stdin interactively on Windows, so restarting in place there can
+leave your next keystrokes landing on the shell instead of Delphi.
 
 It's conservative about when it acts: it only ever fast-forwards, and only
 when the working tree is clean. If there are uncommitted local changes (for
