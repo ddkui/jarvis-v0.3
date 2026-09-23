@@ -25,3 +25,7 @@ pytest>=8.0
 # sounddevice>=0.4
 # webrtcvad>=2.0.10
 # faster-whisper>=1.0
+
+# Optional: only needed for Gmail integration (see README.md "Email (Gmail)").
+# google-auth-oauthlib>=1.0
+# google-api-python-client>=2.0

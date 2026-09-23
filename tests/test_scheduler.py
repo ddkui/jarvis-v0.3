@@ -103,3 +103,22 @@ def test_daily_digest_empty(tmp_path):
     digest = daily_digest(vault, reminders)
 
     assert "Nothing new to report" in digest
+
+
+def test_daily_digest_appends_email_summary_when_given(tmp_path):
+    vault = _FakeVault([])
+    reminders = ReminderStore(tmp_path / "reminders.db")
+
+    digest = daily_digest(vault, reminders, email_summary="Inbox: 2 unread.")
+
+    assert "Nothing new to report" in digest  # notes/reminders section is untouched
+    assert "Email:" in digest
+    assert "Inbox: 2 unread." in digest
+
+
+def test_daily_digest_omits_email_section_when_none_or_empty(tmp_path):
+    vault = _FakeVault([])
+    reminders = ReminderStore(tmp_path / "reminders.db")
+
+    assert "Email:" not in daily_digest(vault, reminders, email_summary=None)
+    assert "Email:" not in daily_digest(vault, reminders, email_summary="")

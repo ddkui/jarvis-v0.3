@@ -3,6 +3,7 @@ from delphi.cli import (
     _summarize,
     build_parser,
     cmd_auth_delete,
+    cmd_auth_gmail,
     cmd_auth_list,
     cmd_auth_set,
     cmd_chat,
@@ -258,6 +259,37 @@ def test_auth_delete_command():
     assert args.command == "auth"
     assert args.auth_command == "delete"
     assert args.name == "GEMINI_API_KEY"
+
+
+def test_auth_gmail_command():
+    args = build_parser().parse_args(["auth", "gmail"])
+    assert args.command == "auth"
+    assert args.auth_command == "gmail"
+
+
+def test_cmd_auth_gmail_reports_success(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr("delphi.gmail_auth.run_interactive_auth_flow", lambda: calls.append(True))
+
+    result = cmd_auth_gmail(build_parser().parse_args(["auth", "gmail"]))
+
+    assert result == 0
+    assert calls == [True]
+    assert "granted" in capsys.readouterr().out.lower()
+
+
+def test_cmd_auth_gmail_reports_failure_without_a_traceback(monkeypatch, capsys):
+    from delphi import gmail_auth
+
+    def _raise():
+        raise gmail_auth.GmailUnavailable("Set DELPHI_ENABLE_EMAIL=1 to enable Gmail.")
+
+    monkeypatch.setattr("delphi.gmail_auth.run_interactive_auth_flow", _raise)
+
+    result = cmd_auth_gmail(build_parser().parse_args(["auth", "gmail"]))
+
+    assert result == 1
+    assert "DELPHI_ENABLE_EMAIL" in capsys.readouterr().out
 
 
 def test_cmd_auth_set_stores_entered_value(monkeypatch):

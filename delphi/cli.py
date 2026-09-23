@@ -93,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     auth_delete = auth_sub.add_parser("delete", help="Remove a stored key from the OS keychain.")
     auth_delete.add_argument("name")
 
+    auth_sub.add_parser(
+        "gmail", help="Grant Delphi access to Gmail via a one-time browser consent flow."
+    )
+
     dashboard_parser = subparsers.add_parser(
         "dashboard", help="Open the local voice settings dashboard in your browser."
     )
@@ -330,6 +334,25 @@ def cmd_auth_delete(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_auth_gmail(args: argparse.Namespace) -> int:
+    from delphi import gmail_auth
+
+    console.print("Opening a browser to grant Delphi access to Gmail...")
+    try:
+        gmail_auth.run_interactive_auth_flow()
+    except gmail_auth.GmailUnavailable as e:
+        console.print(f"[bold red]{escape(str(e))}[/bold red]")
+        return 1
+    except ImportError as e:
+        console.print(
+            f"[bold red]Gmail isn't available:[/bold red] {escape(str(e))}\n"
+            "Install the optional dependency: [cyan]pip install -e .[gmail][/cyan]"
+        )
+        return 1
+    console.print("[green]Gmail access granted[/green] - the token is stored in your OS keychain.")
+    return 0
+
+
 def cmd_note_add(args: argparse.Namespace) -> int:
     config = load_config()
     vault = Vault(config.vault_dir)
@@ -443,10 +466,12 @@ def cmd_remind_done(args: argparse.Namespace) -> int:
 
 
 def cmd_digest(args: argparse.Namespace) -> int:
+    from delphi.tools import email_tools
+
     config = load_config()
     vault = Vault(config.vault_dir)
     reminders = ReminderStore(config.reminders_db_path)
-    console.print(escape(daily_digest(vault, reminders)))
+    console.print(escape(daily_digest(vault, reminders, email_summary=email_tools.summarize_inbox())))
     return 0
 
 
@@ -597,6 +622,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_auth_list(args)
         if args.auth_command == "delete":
             return cmd_auth_delete(args)
+        if args.auth_command == "gmail":
+            return cmd_auth_gmail(args)
 
     parser.print_help()
     return 1

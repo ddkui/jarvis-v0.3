@@ -14,9 +14,10 @@ The assistant itself is a thin agentic loop over [litellm](https://docs.litellm.
 which routes to whichever model provider you configure (Claude, Gemini, DeepSeek,
 Groq-hosted open models, a local Ollama model, and more) behind one call shape,
 with tool use wired up to tools for searching/adding notes and managing
-reminders, plus calendar and email as stubbed extension points (they return no
-tools until you configure credentials for them, at which point they're meant
-to be filled in with a real integration). Reminders are stored separately in
+reminders, a real Gmail integration (see "Email (Gmail)" below), and calendar
+as a stubbed extension point (it returns no tools until you configure
+credentials for it, at which point it's meant to be filled in with a real
+integration the same way email was). Reminders are stored separately in
 their own SQLite table, independent of the note vault.
 
 ## Choosing a model
@@ -248,6 +249,61 @@ The system prompt also instructs the model to never call
 always be a real message from you between "here's the diff" and "apply it."
 If you don't like a pending change, ask it to keep iterating, or say
 "discard it" to call `discard_pending_changes` and reset to the last commit.
+
+## Email (Gmail)
+
+Delphi can read, search, label, and archive mail in your Gmail inbox — it
+**cannot delete anything or send mail on your behalf**. "Organize" here means
+label + archive only: archiving an email just removes Gmail's `INBOX` label
+(the same thing the archive button in Gmail does), which is reversible and
+never destructive — nothing is ever moved to Trash. It's off unless you set
+it up:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a
+   project (or use an existing one), enable the **Gmail API** for it, then
+   create an OAuth client under "Credentials" with application type
+   **Desktop app**. Download its `credentials.json`.
+2. Install the optional dependency: `pip install -e .[gmail]`.
+3. In `.env`, set `GOOGLE_GMAIL_CREDENTIALS=/path/to/credentials.json` and
+   `DELPHI_ENABLE_EMAIL=1`.
+4. Run the one-time interactive consent flow:
+   ```bash
+   delphi auth gmail
+   ```
+   This opens a browser to sign in and grant access, then stores the
+   resulting token in your OS keychain (not a file) — the same secure
+   storage `delphi auth set` uses for API keys. You only need to do this
+   once; Delphi refreshes the token silently after that.
+
+Tools: `search_email`, `list_recent_emails`, `get_email`, `label_email`
+(creates the label first if it doesn't exist yet), `archive_email`,
+`mark_read`, `mark_unread`. There is deliberately no `trash_email`,
+`delete_email`, or `send_email` tool in this build.
+
+## Daily summary (off by default)
+
+Delphi can automatically put together a digest — notes updated recently,
+reminders due, and (if email is set up, see above) an inbox summary — twice a
+day without you asking for it, the same content `delphi digest` prints
+on-demand. It's off unless you turn it on, and only runs as part of
+`delphi tray` (like wake-word listening below — it doesn't run under
+`delphi chat` or `delphi dashboard`):
+
+```bash
+# DELPHI_ENABLE_DAILY_SUMMARY=1 in .env
+```
+
+- `DELPHI_DAILY_SUMMARY_TIMES` (default `08:00,20:00`) — comma-separated
+  24h local times to run at.
+- `DELPHI_ENABLE_DAILY_SUMMARY_SPEAK` — a **separate** opt-in from just
+  enabling the summary: set this to also have Delphi speak a short version
+  of each summary aloud (requires `DELPHI_ENABLE_VOICE=1` too — see "Voice
+  output" below). Unprompted spoken output is more intrusive than a written
+  note, so it stays off unless you ask for it specifically.
+
+Every run is saved as a new note in your vault regardless of whether
+speaking is on, so you always have a written record even if you weren't
+around to hear it.
 
 ## Voice output (off by default)
 

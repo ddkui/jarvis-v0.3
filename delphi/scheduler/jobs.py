@@ -73,7 +73,7 @@ class ReminderStore:
         ]
 
 
-def daily_digest(vault: "Vault", reminders: ReminderStore) -> str:
+def daily_digest(vault: "Vault", reminders: ReminderStore, email_summary: str | None = None) -> str:
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
     end_of_today = now.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -100,24 +100,28 @@ def daily_digest(vault: "Vault", reminders: ReminderStore) -> str:
 
     if not recent_notes and not due_reminders:
         lines.append("Nothing new to report - no notes updated in the last 24h, no reminders due.")
-        return "\n".join(lines)
-
-    if recent_notes:
-        lines.append("")
-        lines.append(f"Notes updated in the last 24h ({len(recent_notes)}):")
-        for note in recent_notes:
-            lines.append(f"  - {note.title} ({note.id})")
     else:
-        lines.append("")
-        lines.append("Notes updated in the last 24h: none")
+        if recent_notes:
+            lines.append("")
+            lines.append(f"Notes updated in the last 24h ({len(recent_notes)}):")
+            for note in recent_notes:
+                lines.append(f"  - {note.title} ({note.id})")
+        else:
+            lines.append("")
+            lines.append("Notes updated in the last 24h: none")
 
-    if due_reminders:
+        if due_reminders:
+            lines.append("")
+            lines.append(f"Reminders due today or overdue ({len(due_reminders)}):")
+            for reminder in due_reminders:
+                lines.append(f"  - {reminder.text} (due {reminder.due_at})")
+        else:
+            lines.append("")
+            lines.append("Reminders due today or overdue: none")
+
+    if email_summary:
         lines.append("")
-        lines.append(f"Reminders due today or overdue ({len(due_reminders)}):")
-        for reminder in due_reminders:
-            lines.append(f"  - {reminder.text} (due {reminder.due_at})")
-    else:
-        lines.append("")
-        lines.append("Reminders due today or overdue: none")
+        lines.append("Email:")
+        lines.append(f"  {email_summary}")
 
     return "\n".join(lines)

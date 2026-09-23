@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import threading
 
-from delphi import autoupdate, listen
+from delphi import autoupdate, daily_summary, listen
 from delphi.config import DelphiConfig
 
 
@@ -40,6 +40,7 @@ def run_tray(config: DelphiConfig, port: int = 8734) -> None:
     autoupdate.check_once_and_restart_if_updated()
     autoupdate.run_background()
     listen.run_background(config)
+    daily_summary.run_background(config)
 
     try:
         import pystray

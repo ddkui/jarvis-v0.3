@@ -133,14 +133,8 @@ def test_calendar_tools_raises_when_configured(monkeypatch):
 
 
 def test_email_tools_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("GOOGLE_GMAIL_CREDENTIALS", raising=False)
+    monkeypatch.delenv("DELPHI_ENABLE_EMAIL", raising=False)
     assert email_tools.build_tools() == []
-
-
-def test_email_tools_raises_when_configured(monkeypatch):
-    monkeypatch.setenv("GOOGLE_GMAIL_CREDENTIALS", "some-path.json")
-    with pytest.raises(NotImplementedError):
-        email_tools.build_tools()
 
 
 def test_remember_then_list_memory(tmp_path: Path):
