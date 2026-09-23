@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from delphi import secrets
@@ -31,6 +31,7 @@ class DelphiConfig:
     vault_dir: Path
     db_path: Path
     reminders_db_path: Path
+    fallback_models: list[str] = field(default_factory=list)
 
 
 def load_config() -> DelphiConfig:
@@ -42,10 +43,14 @@ def load_config() -> DelphiConfig:
     default_db_path = vault_dir / ".delphi" / "memory.db"
     db_path = Path(os.environ.get("DELPHI_DB_PATH", str(default_db_path)))
     reminders_db_path = vault_dir / ".delphi" / "reminders.db"
+    fallback_models = [
+        m.strip() for m in os.environ.get("DELPHI_FALLBACK_MODELS", "").split(",") if m.strip()
+    ]
 
     return DelphiConfig(
         model=model,
         vault_dir=vault_dir,
         db_path=db_path,
         reminders_db_path=reminders_db_path,
+        fallback_models=fallback_models,
     )

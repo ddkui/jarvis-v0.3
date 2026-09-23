@@ -94,6 +94,15 @@ def test_build_agent_constructs_delphi_agent(tmp_path):
     assert agent.model == "anthropic/claude-opus-5"
 
 
+def test_build_agent_passes_fallback_models_through(tmp_path):
+    config = _config(tmp_path)
+    config.fallback_models = ["nvidia_nim/meta/llama3-70b-instruct"]
+
+    agent = runtime.build_agent(config)
+
+    assert agent.fallback_models == ["nvidia_nim/meta/llama3-70b-instruct"]
+
+
 def test_build_agent_resumes_persisted_conversation_by_default(tmp_path):
     from delphi import conversation
 

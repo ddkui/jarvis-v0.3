@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from types import SimpleNamespace
 from typing import Callable
 
@@ -11,6 +12,23 @@ from delphi.models import AgentAbort, Tool
 
 _MAX_TOOL_ITERATIONS = 8
 _IMAGE_DATA_URL_PREFIX = "data:image/"
+
+# Transient/availability failures worth retrying with a fallback model rather
+# than surfacing immediately - e.g. a provider's rate limit or an outage.
+# Deliberately excludes AuthenticationError/NotFoundError/BadRequestError and
+# friends: those are configuration problems that would fail identically on
+# every model, so burning through the fallback list on them just delays the
+# same error. ServiceUnavailableError also covers MidStreamFallbackError
+# (litellm raises that as a subclass) - a stream that dies partway through
+# hits this same path.
+_RETRYABLE_ERRORS = (
+    litellm.exceptions.RateLimitError,
+    litellm.exceptions.APIConnectionError,
+    litellm.exceptions.ServiceUnavailableError,
+    litellm.exceptions.Timeout,
+    litellm.exceptions.InternalServerError,
+    litellm.exceptions.BadGatewayError,
+)
 
 
 class DelphiAgent:
@@ -26,6 +44,10 @@ class DelphiAgent:
     If the configured provider's credentials are missing/invalid,
     litellm.exceptions.AuthenticationError propagates out of send() unhandled; the CLI
     layer is expected to catch it and print a friendly message.
+
+    fallback_models, if given, are tried in order whenever `model` (or the
+    previous fallback) hits a transient/availability error - a provider's
+    rate limit being the main case in practice. See _RETRYABLE_ERRORS.
     """
 
     def __init__(
@@ -34,8 +56,10 @@ class DelphiAgent:
         tools: list[Tool],
         max_tool_iterations: int = _MAX_TOOL_ITERATIONS,
         system_prompt: str = SYSTEM_PROMPT,
+        fallback_models: list[str] | None = None,
     ) -> None:
         self.model = model
+        self.fallback_models = fallback_models or []
         self.system_prompt = system_prompt
         self._max_tool_iterations = max_tool_iterations
         self._tool_schemas = [
@@ -59,13 +83,42 @@ class DelphiAgent:
         return handler(arguments)
 
     def _stream_completion(self, on_delta: Callable[[str], None] | None):
-        """Run one streamed completion call and return an object shaped like a
-        non-streaming response's `.message` (`.content`, `.tool_calls`), by
-        accumulating chunks as they arrive. Tool-call argument fragments are
-        concatenated by their stream `index`, matching how providers split large
-        tool calls across many chunks."""
+        """Run one streamed completion call, trying self.model first and then
+        each of self.fallback_models in order if a transient/availability
+        error hits (see _RETRYABLE_ERRORS) - e.g. the primary provider's rate
+        limit. A failure that isn't in that set (bad API key, invalid model,
+        etc.) propagates immediately without wasting time cycling through
+        fallbacks, since it would fail identically on every one of them.
+
+        Any text already streamed via on_delta before a retryable failure
+        stays on screen - the retry starts a fresh response after it rather
+        than trying to splice output together, which keeps this simple at the
+        cost of a visible seam on the rare turn that actually needs to fall
+        back mid-stream."""
+        models_to_try = [self.model, *self.fallback_models]
+        last_error: Exception | None = None
+        for attempt, model in enumerate(models_to_try):
+            try:
+                return self._stream_completion_with_model(model, on_delta)
+            except _RETRYABLE_ERRORS as e:
+                last_error = e
+                if attempt + 1 < len(models_to_try):
+                    print(
+                        f"[agent] {model} failed ({e}); falling back to {models_to_try[attempt + 1]}",
+                        file=sys.stderr,
+                    )
+        assert last_error is not None  # models_to_try is never empty (self.model is always first)
+        raise last_error
+
+    def _stream_completion_with_model(self, model: str, on_delta: Callable[[str], None] | None):
+        """Run one streamed completion call against a specific model and
+        return an object shaped like a non-streaming response's `.message`
+        (`.content`, `.tool_calls`), by accumulating chunks as they arrive.
+        Tool-call argument fragments are concatenated by their stream
+        `index`, matching how providers split large tool calls across many
+        chunks."""
         stream = litellm.completion(
-            model=self.model,
+            model=model,
             messages=[{"role": "system", "content": self.system_prompt}] + self.messages,
             tools=self._tool_schemas or None,
             stream=True,

@@ -1,6 +1,7 @@
 import json
 from types import SimpleNamespace
 
+import litellm
 import pytest
 
 from delphi.agent.core import DelphiAgent
@@ -236,6 +237,77 @@ def test_agent_abort_propagates_immediately(monkeypatch):
 
     with pytest.raises(AgentAbort, match="failsafe tripped"):
         agent.send("click something")
+
+
+def test_falls_back_to_next_model_on_rate_limit(monkeypatch):
+    models_seen = []
+
+    def fake_completion(**kwargs):
+        models_seen.append(kwargs["model"])
+        if kwargs["model"] == "gemini/gemini-2.5-flash":
+            raise litellm.exceptions.RateLimitError(
+                "quota exceeded", llm_provider="gemini", model="gemini-2.5-flash"
+            )
+        return _text_stream("Answered by the backup model.")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(
+        model="gemini/gemini-2.5-flash",
+        tools=[],
+        fallback_models=["nvidia_nim/meta/llama3-70b-instruct"],
+    )
+    result = agent.send("hi")
+
+    assert result == "Answered by the backup model."
+    assert models_seen == ["gemini/gemini-2.5-flash", "nvidia_nim/meta/llama3-70b-instruct"]
+
+
+def test_raises_last_error_when_every_fallback_also_fails(monkeypatch):
+    def fake_completion(**kwargs):
+        raise litellm.exceptions.RateLimitError(
+            f"quota exceeded on {kwargs['model']}", llm_provider="x", model=kwargs["model"]
+        )
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(
+        model="gemini/gemini-2.5-flash",
+        tools=[],
+        fallback_models=["nvidia_nim/meta/llama3-70b-instruct"],
+    )
+    with pytest.raises(litellm.exceptions.RateLimitError, match="nvidia_nim/meta/llama3-70b-instruct"):
+        agent.send("hi")
+
+
+def test_non_retryable_error_skips_fallbacks_entirely(monkeypatch):
+    models_seen = []
+
+    def fake_completion(**kwargs):
+        models_seen.append(kwargs["model"])
+        raise litellm.exceptions.AuthenticationError("bad key", llm_provider="gemini", model="x")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(
+        model="gemini/gemini-2.5-flash",
+        tools=[],
+        fallback_models=["nvidia_nim/meta/llama3-70b-instruct"],
+    )
+    with pytest.raises(litellm.exceptions.AuthenticationError):
+        agent.send("hi")
+
+    assert models_seen == ["gemini/gemini-2.5-flash"]
+
+
+def test_no_fallback_models_configured_behaves_as_before(monkeypatch):
+    monkeypatch.setattr(
+        "delphi.agent.core.litellm.completion",
+        lambda **kwargs: _text_stream("Hello there."),
+    )
+
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[])
+    assert agent.send("hi") == "Hello there."
 
 
 def test_unknown_tool_call_surfaces_as_error(monkeypatch):

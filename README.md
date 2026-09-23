@@ -30,10 +30,38 @@ provider's API key. A few starting points:
 | Gemini Flash (cheap, fast) | `gemini/gemini-2.5-flash` | `GEMINI_API_KEY` |
 | DeepSeek | `deepseek/deepseek-chat` | `DEEPSEEK_API_KEY` |
 | Groq-hosted open models | `groq/llama-3.3-70b-versatile` | `GROQ_API_KEY` |
+| NVIDIA-hosted models ([build.nvidia.com](https://build.nvidia.com/models), free tier) | `nvidia_nim/meta/llama3-70b-instruct` | `NVIDIA_NIM_API_KEY` |
 | Local via Ollama (free, runs on your machine) | `ollama/llama3.1` | none — run `ollama serve` |
 
 Any [model litellm supports](https://docs.litellm.ai/docs/providers) works the
-same way — just set `DELPHI_MODEL` and the matching key in `.env`.
+same way — just set `DELPHI_MODEL` and the matching key in `.env`. For NVIDIA,
+get a key by signing in at [build.nvidia.com](https://build.nvidia.com/models),
+opening any model's page, and generating an API key there (it starts with
+`nvapi-`); the same key works for every model in their catalog, so the exact
+`DELPHI_MODEL` you pick (any `<namespace>/<model>` path from that catalog,
+e.g. `nvidia_nim/nvidia/llama-3.1-nemotron-70b-instruct`) is just a matter of
+picking one from the site.
+
+### Falling back to a second model on rate limits/outages
+
+Set `DELPHI_FALLBACK_MODELS` to a comma-separated list of additional
+`<provider>/<model>` strings (same format and key requirements as
+`DELPHI_MODEL` above). If the primary model hits a rate limit or a transient
+outage mid-conversation, Delphi automatically retries the same turn against
+the next model in the list instead of failing the turn — useful for pairing a
+provider with a tight free-tier quota (Gemini's free tier caps at 20
+requests/day) with a backup:
+
+```
+DELPHI_MODEL=gemini/gemini-2.5-flash
+DELPHI_FALLBACK_MODELS=nvidia_nim/meta/llama3-70b-instruct
+```
+
+This only triggers for availability problems (rate limits, timeouts, 5xx
+errors) — a bad API key or an invalid model name fails immediately rather
+than cycling through the whole list, since that kind of error would just
+repeat identically on every entry. Each provider's own key still needs to be
+set for its model to work as a fallback.
 
 ## Usage
 

@@ -54,4 +54,5 @@ KNOWN_KEYS = [
     "GEMINI_API_KEY",
     "DEEPSEEK_API_KEY",
     "GROQ_API_KEY",
+    "NVIDIA_NIM_API_KEY",
 ]

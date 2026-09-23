@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from delphi.config import _load_dotenv
+from delphi.config import _load_dotenv, load_config
 
 
 def test_blank_placeholder_does_not_set_env_var(tmp_path: Path, monkeypatch):
@@ -23,3 +23,23 @@ def test_real_env_var_wins_over_dotenv_value(tmp_path: Path, monkeypatch):
     _load_dotenv(env_file)
 
     assert os.environ["SOME_KEY"] == "from-shell"
+
+
+def test_fallback_models_defaults_to_empty(monkeypatch):
+    monkeypatch.delenv("DELPHI_FALLBACK_MODELS", raising=False)
+    assert load_config().fallback_models == []
+
+
+def test_fallback_models_parses_comma_separated_list(monkeypatch):
+    monkeypatch.setenv(
+        "DELPHI_FALLBACK_MODELS", "nvidia_nim/meta/llama3-70b-instruct, groq/llama-3.3-70b-versatile"
+    )
+    assert load_config().fallback_models == [
+        "nvidia_nim/meta/llama3-70b-instruct",
+        "groq/llama-3.3-70b-versatile",
+    ]
+
+
+def test_fallback_models_ignores_blank_entries(monkeypatch):
+    monkeypatch.setenv("DELPHI_FALLBACK_MODELS", "nvidia_nim/meta/llama3-70b-instruct,,  ,")
+    assert load_config().fallback_models == ["nvidia_nim/meta/llama3-70b-instruct"]
