@@ -14,10 +14,12 @@ from delphi.tools import (
     code_tools,
     computer_tools,
     email_tools,
+    location_tools,
     memory_tools,
     notes_tools,
     reminder_tools,
     self_update_tools,
+    time_tools,
 )
 from delphi.vault import Vault
 
@@ -59,6 +61,8 @@ def build_agent_stack(config: DelphiConfig):
     tools.extend(computer_tools.build_tools())
     tools.extend(code_tools.build_tools())
     tools.extend(self_update_tools.build_tools())
+    tools.extend(time_tools.build_tools())
+    tools.extend(location_tools.build_tools())
 
     return vault, store, reminders, tools
 
