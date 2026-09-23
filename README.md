@@ -64,6 +64,16 @@ than cycling through the whole list, since that kind of error would just
 repeat identically on every entry. Each provider's own key still needs to be
 set for its model to work as a fallback.
 
+Every request (whether or not fallbacks are configured) has a timeout —
+`DELPHI_REQUEST_TIMEOUT` seconds (default `60`) of the connection going fully
+silent, not a cap on how long a response can take overall, so a normal reply
+that's just slow to fully arrive isn't cut off as long as *something* keeps
+coming in. Without this, a model that stalls instead of returning a clean
+error — seen in practice with a fallback model choking on something in the
+conversation history — hung the whole turn forever with no way to recover;
+now it raises a timeout instead, which (for a fallback attempt) moves on to
+the next model the same way a rate limit does.
+
 ## Usage
 
 Install dependencies:

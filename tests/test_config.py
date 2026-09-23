@@ -43,3 +43,18 @@ def test_fallback_models_parses_comma_separated_list(monkeypatch):
 def test_fallback_models_ignores_blank_entries(monkeypatch):
     monkeypatch.setenv("DELPHI_FALLBACK_MODELS", "nvidia_nim/meta/llama3-70b-instruct,,  ,")
     assert load_config().fallback_models == ["nvidia_nim/meta/llama3-70b-instruct"]
+
+
+def test_request_timeout_defaults_to_60_seconds(monkeypatch):
+    monkeypatch.delenv("DELPHI_REQUEST_TIMEOUT", raising=False)
+    assert load_config().request_timeout_seconds == 60.0
+
+
+def test_request_timeout_reads_env_var(monkeypatch):
+    monkeypatch.setenv("DELPHI_REQUEST_TIMEOUT", "30")
+    assert load_config().request_timeout_seconds == 30.0
+
+
+def test_request_timeout_falls_back_to_default_on_garbage(monkeypatch):
+    monkeypatch.setenv("DELPHI_REQUEST_TIMEOUT", "not-a-number")
+    assert load_config().request_timeout_seconds == 60.0

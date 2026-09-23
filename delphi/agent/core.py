@@ -12,6 +12,17 @@ from delphi.models import AgentAbort, Tool
 
 _MAX_TOOL_ITERATIONS = 8
 _IMAGE_DATA_URL_PREFIX = "data:image/"
+# No timeout on the completion call meant a provider that stalls instead of
+# erroring cleanly (no bytes at all, ever) just hung forever - especially
+# visible with a fallback model choking on something in the conversation
+# history (e.g. a large embedded screenshot) without returning a clean 4xx.
+# litellm's `timeout` is a read timeout: as long as *something* keeps
+# streaming in, however long the response takes, it's fine; it only fires
+# once the connection goes fully silent for this many seconds - which then
+# raises litellm.exceptions.Timeout, already in _RETRYABLE_ERRORS, so a
+# stalled fallback model correctly moves on to the next one instead of
+# hanging the whole turn.
+_DEFAULT_REQUEST_TIMEOUT_SECONDS = 60
 
 # Transient/availability failures worth retrying with a fallback model rather
 # than surfacing immediately - e.g. a provider's rate limit or an outage.
@@ -57,11 +68,13 @@ class DelphiAgent:
         max_tool_iterations: int = _MAX_TOOL_ITERATIONS,
         system_prompt: str = SYSTEM_PROMPT,
         fallback_models: list[str] | None = None,
+        request_timeout_seconds: float = _DEFAULT_REQUEST_TIMEOUT_SECONDS,
     ) -> None:
         self.model = model
         self.fallback_models = fallback_models or []
         self.system_prompt = system_prompt
         self._max_tool_iterations = max_tool_iterations
+        self._request_timeout_seconds = request_timeout_seconds
         self._tool_schemas = [
             {
                 "type": "function",
@@ -122,6 +135,7 @@ class DelphiAgent:
             messages=[{"role": "system", "content": self.system_prompt}] + self.messages,
             tools=self._tool_schemas or None,
             stream=True,
+            timeout=self._request_timeout_seconds,
         )
 
         content_parts: list[str] = []

@@ -32,6 +32,7 @@ class DelphiConfig:
     db_path: Path
     reminders_db_path: Path
     fallback_models: list[str] = field(default_factory=list)
+    request_timeout_seconds: float = 60.0
 
 
 def load_config() -> DelphiConfig:
@@ -46,6 +47,10 @@ def load_config() -> DelphiConfig:
     fallback_models = [
         m.strip() for m in os.environ.get("DELPHI_FALLBACK_MODELS", "").split(",") if m.strip()
     ]
+    try:
+        request_timeout_seconds = float(os.environ.get("DELPHI_REQUEST_TIMEOUT", "60"))
+    except ValueError:
+        request_timeout_seconds = 60.0
 
     return DelphiConfig(
         model=model,
@@ -53,4 +58,5 @@ def load_config() -> DelphiConfig:
         db_path=db_path,
         reminders_db_path=reminders_db_path,
         fallback_models=fallback_models,
+        request_timeout_seconds=request_timeout_seconds,
     )

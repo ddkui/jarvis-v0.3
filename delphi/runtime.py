@@ -96,6 +96,7 @@ def build_agent(config: DelphiConfig, resume: bool = True):
         max_tool_iterations=max_tool_iterations_for(tools),
         system_prompt=build_system_prompt(memory_facts),
         fallback_models=config.fallback_models,
+        request_timeout_seconds=config.request_timeout_seconds,
     )
     if resume:
         from delphi import conversation

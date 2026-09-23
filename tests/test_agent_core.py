@@ -310,6 +310,71 @@ def test_no_fallback_models_configured_behaves_as_before(monkeypatch):
     assert agent.send("hi") == "Hello there."
 
 
+def test_completion_call_gets_a_timeout_by_default(monkeypatch):
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["timeout"] = kwargs.get("timeout")
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[])
+    agent.send("hi")
+
+    assert captured["timeout"] == 60.0
+
+
+def test_completion_call_uses_configured_timeout(monkeypatch):
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["timeout"] = kwargs.get("timeout")
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[], request_timeout_seconds=15)
+    agent.send("hi")
+
+    assert captured["timeout"] == 15
+
+
+def test_a_stalled_fallback_model_times_out_and_tries_the_next_one(monkeypatch):
+    # This is the bug this test guards against: a fallback model that stalls
+    # (no bytes at all, ever) rather than erroring cleanly used to hang the
+    # whole turn forever, since litellm.completion() had no timeout at all.
+    models_seen = []
+
+    def fake_completion(**kwargs):
+        models_seen.append(kwargs["model"])
+        if kwargs["model"] == "gemini/gemini-2.5-flash":
+            raise litellm.exceptions.RateLimitError(
+                "quota exceeded", llm_provider="gemini", model="gemini-2.5-flash"
+            )
+        if kwargs["model"] == "nvidia_nim/moonshotai/kimi-k3":
+            raise litellm.exceptions.Timeout(
+                "timed out", llm_provider="nvidia_nim", model="moonshotai/kimi-k3"
+            )
+        return _text_stream("Answered by the second fallback.")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(
+        model="gemini/gemini-2.5-flash",
+        tools=[],
+        fallback_models=["nvidia_nim/moonshotai/kimi-k3", "nvidia_nim/deepseek-ai/deepseek-v4-flash"],
+    )
+    result = agent.send("hi")
+
+    assert result == "Answered by the second fallback."
+    assert models_seen == [
+        "gemini/gemini-2.5-flash",
+        "nvidia_nim/moonshotai/kimi-k3",
+        "nvidia_nim/deepseek-ai/deepseek-v4-flash",
+    ]
+
+
 def test_unknown_tool_call_surfaces_as_error(monkeypatch):
     calls = iter(
         [
