@@ -200,6 +200,15 @@ failsafe. If you want a confirmation step before each action instead, that's
 a reasonable follow-up change to `delphi/agent/core.py`'s tool-execution
 loop.
 
+**Known gotcha: typing into a window that isn't focused yet.** Opening an
+application (e.g. via the Start menu) isn't instant — if Delphi types
+immediately after launching something, the keystrokes can land on whatever
+still had focus a moment earlier (often the terminal `delphi chat` itself is
+running in) instead of the new window. The `computer_type` tool's
+description tells the model to screenshot and confirm focus first, but this
+is prompt-level guidance, not a hard guarantee — if you see typed text show
+up in the wrong place, that's what happened; just ask it to try again.
+
 ## Writing & running code (off by default)
 
 Delphi can run Python and shell commands and read/write files, scoped to a

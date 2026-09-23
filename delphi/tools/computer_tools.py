@@ -191,7 +191,14 @@ def build_tools() -> list[Tool]:
         ),
         Tool(
             name="computer_type",
-            description="Type text at the current keyboard focus.",
+            description=(
+                "Type text at the current keyboard focus. If you just launched or "
+                "switched to a window (e.g. opened an app via the Start menu), take "
+                "a computer_screenshot first to confirm that window has actually "
+                "opened and has focus before typing - launching an app is not "
+                "instant, and typing too soon sends the keystrokes to whatever still "
+                "had focus instead (often wherever this conversation is running)."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {"text": {"type": "string"}},
