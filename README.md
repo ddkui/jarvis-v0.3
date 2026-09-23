@@ -405,10 +405,10 @@ like "Delphi" needs an external one-time step (synthetic training data
 generation, typically via a Colab notebook). To avoid that setup burden,
 Delphi instead uses a different, zero-training approach: a lightweight
 voice-activity detector (`webrtcvad`) segments your microphone stream into
-utterances, each one is transcribed locally with Whisper
-(`faster-whisper`, GPU-accelerated the same way voice output is if you set
-that up — see "Speeding it up with a GPU" above), and the transcript is
-checked for the wake word. This uses more CPU/GPU per utterance than a
+utterances, each one is transcribed locally with Whisper (`faster-whisper`,
+which can use a GPU if one's usable — see the `DELPHI_WHISPER_DEVICE` note
+below), and the transcript is checked for the wake word. This uses more
+CPU/GPU per utterance than a
 dedicated wake-word model would (every utterance gets transcribed, not just
 ones that start with "Delphi"), but works immediately with the literal word
 "Delphi" and needs no extra setup or external training step.
@@ -426,8 +426,21 @@ Tunable via `.env`:
 - `DELPHI_WHISPER_MODEL` (default `small.en`) — any
   [faster-whisper model name](https://github.com/SYSTRAN/faster-whisper);
   smaller (`tiny.en`, `base.en`) is faster and lighter but less accurate,
-  larger (`medium.en`) is the reverse. Only matters if you don't have a GPU —
-  with one, even `small.en` transcribes each command in well under a second.
+  larger (`medium.en`) is the reverse. Matters most on CPU — on a GPU, even
+  `small.en` transcribes each command in well under a second.
+- `DELPHI_WHISPER_DEVICE` (default `auto`) — set to `cpu` to force CPU
+  transcription. `auto` tries to use a GPU if `faster-whisper`'s own runtime
+  (`ctranslate2`) can see one usable, which is a **separate** check from
+  Chatterbox/torch's GPU detection for voice output — a CUDA-enabled `torch`
+  install (see "Speeding it up with a GPU" above) does *not* automatically
+  make this work, since `ctranslate2` needs its own CUDA/cuBLAS runtime DLLs
+  visible on the system rather than the private copies `torch` bundles for
+  itself. If you see `Library cublas64_12.dll is not found or cannot be
+  loaded` (or similar), either set `DELPHI_WHISPER_DEVICE=cpu` — CPU
+  transcription of a short spoken command is fast enough that this usually
+  isn't noticeable, unlike TTS generation — or install the matching
+  [NVIDIA CUDA/cuBLAS runtime](https://github.com/SYSTRAN/faster-whisper#gpu)
+  system-wide to get GPU transcription too.
 
 Only `delphi tray` runs the listener — `delphi chat` and `delphi dashboard`
 don't, since they're meant to be run in a foreground terminal you're already

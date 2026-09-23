@@ -30,8 +30,10 @@ from pathlib import Path
 _ENABLE_ENV_VAR = "DELPHI_ENABLE_WAKE_WORD"
 _WAKE_WORD_ENV_VAR = "DELPHI_WAKE_WORD"
 _WHISPER_MODEL_ENV_VAR = "DELPHI_WHISPER_MODEL"
+_WHISPER_DEVICE_ENV_VAR = "DELPHI_WHISPER_DEVICE"
 _DEFAULT_WAKE_WORD = "delphi"
 _DEFAULT_WHISPER_MODEL = "small.en"
+_DEFAULT_WHISPER_DEVICE = "auto"
 
 _SAMPLE_RATE = 16000
 _FRAME_MS = 30
@@ -169,7 +171,14 @@ def _load_whisper_model():
     from faster_whisper import WhisperModel
 
     model_name = os.environ.get(_WHISPER_MODEL_ENV_VAR, _DEFAULT_WHISPER_MODEL)
-    _whisper_model = WhisperModel(model_name, device="auto", compute_type="auto")
+    # "auto" picks CUDA if faster-whisper's own runtime (ctranslate2) can see
+    # a usable GPU - which needs its own CUDA/cuBLAS DLLs on the system, not
+    # just a CUDA-enabled torch install (torch bundles its own copies
+    # privately). If those aren't present, this fails loudly instead of
+    # silently falling back, so set DELPHI_WHISPER_DEVICE=cpu to force CPU -
+    # short commands transcribe in about a second there either way.
+    device = os.environ.get(_WHISPER_DEVICE_ENV_VAR, _DEFAULT_WHISPER_DEVICE)
+    _whisper_model = WhisperModel(model_name, device=device, compute_type="auto")
     return _whisper_model
 
 

@@ -1,5 +1,7 @@
+import sys
 import threading
 import time
+import types
 
 from delphi import listen
 
@@ -30,6 +32,45 @@ def test_ensure_ready_raises_when_dependency_missing(monkeypatch):
         assert False, "expected WakeWordUnavailable"
     except listen.WakeWordUnavailable as e:
         assert "pip install -e .[listen]" in str(e)
+
+
+def test_load_whisper_model_uses_configured_model_and_device(monkeypatch):
+    captured = {}
+
+    class FakeWhisperModel:
+        def __init__(self, model_name, device, compute_type):
+            captured["model_name"] = model_name
+            captured["device"] = device
+            captured["compute_type"] = compute_type
+
+    fake_module = types.ModuleType("faster_whisper")
+    fake_module.WhisperModel = FakeWhisperModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_module)
+    monkeypatch.setattr(listen, "_whisper_model", None)
+    monkeypatch.setenv("DELPHI_WHISPER_MODEL", "tiny.en")
+    monkeypatch.setenv("DELPHI_WHISPER_DEVICE", "cpu")
+
+    listen._load_whisper_model()
+
+    assert captured == {"model_name": "tiny.en", "device": "cpu", "compute_type": "auto"}
+
+
+def test_load_whisper_model_defaults_to_auto_device(monkeypatch):
+    captured = {}
+
+    class FakeWhisperModel:
+        def __init__(self, model_name, device, compute_type):
+            captured["device"] = device
+
+    fake_module = types.ModuleType("faster_whisper")
+    fake_module.WhisperModel = FakeWhisperModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_module)
+    monkeypatch.setattr(listen, "_whisper_model", None)
+    monkeypatch.delenv("DELPHI_WHISPER_DEVICE", raising=False)
+
+    listen._load_whisper_model()
+
+    assert captured["device"] == "auto"
 
 
 class TestConversationGate:
