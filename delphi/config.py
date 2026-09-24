@@ -33,6 +33,7 @@ class DelphiConfig:
     reminders_db_path: Path
     fallback_models: list[str] = field(default_factory=list)
     request_timeout_seconds: float = 60.0
+    ollama_num_ctx: int | None = 8192
 
 
 def load_config() -> DelphiConfig:
@@ -52,6 +53,16 @@ def load_config() -> DelphiConfig:
     except ValueError:
         request_timeout_seconds = 60.0
 
+    # "0" (not "" - _load_dotenv skips blank .env values entirely, so an
+    # empty-string sentinel could never actually reach here from .env) opts
+    # out of overriding num_ctx at all, e.g. if a custom Ollama Modelfile
+    # already sets a larger one server-side and Delphi shouldn't clobber it.
+    try:
+        parsed_num_ctx = int(os.environ.get("DELPHI_OLLAMA_NUM_CTX", "8192").strip())
+        ollama_num_ctx = parsed_num_ctx if parsed_num_ctx > 0 else None
+    except ValueError:
+        ollama_num_ctx = 8192
+
     return DelphiConfig(
         model=model,
         vault_dir=vault_dir,
@@ -59,4 +70,5 @@ def load_config() -> DelphiConfig:
         reminders_db_path=reminders_db_path,
         fallback_models=fallback_models,
         request_timeout_seconds=request_timeout_seconds,
+        ollama_num_ctx=ollama_num_ctx,
     )

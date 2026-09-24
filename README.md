@@ -43,6 +43,35 @@ opening any model's page, and generating an API key there (it starts with
 e.g. `nvidia_nim/nvidia/llama-3.1-nemotron-70b-instruct`) is just a matter of
 picking one from the site.
 
+### Using a local/remote Ollama server
+
+Point `OLLAMA_API_BASE` at wherever Ollama is actually running —
+`http://localhost:11434` if it's on the same machine as Delphi, or
+`http://<server-ip>:11434` for one on your network. A remote server also
+needs telling to accept non-local connections in the first place (Ollama
+only listens on `localhost` by default): set `OLLAMA_HOST=0.0.0.0:11434` in
+its own environment (e.g. via `systemctl edit ollama.service` on Linux, or a
+system environment variable on Windows) and restart it there, then verify
+it's reachable before touching Delphi's config: `curl
+http://<server-ip>:11434/api/tags` should return JSON.
+
+```
+DELPHI_MODEL=ollama/llama3.1
+OLLAMA_API_BASE=http://192.168.1.160:11434
+```
+
+**Context window gotcha**: Ollama defaults every model to a small
+2048/4096-token context window regardless of what the model actually
+supports, and Delphi's system prompt plus its full tool schema list alone
+can easily be 10k+ tokens (more with computer-use/code enabled) — so a fresh
+conversation can hit `exceeds the available context size` on literally the
+first message. Delphi works around this itself: it passes `num_ctx=8192` to
+Ollama automatically for any `ollama/...` model, no setup needed. Raise it
+further with `DELPHI_OLLAMA_NUM_CTX` if you still hit the limit (bounded by
+how much your server's RAM/VRAM and the model itself can actually handle),
+or set it to `0` to stop Delphi from overriding it at all (e.g. if you've
+already set a larger one yourself via a custom Ollama Modelfile).
+
 ### Falling back to a second model on rate limits/outages
 
 Set `DELPHI_FALLBACK_MODELS` to a comma-separated list of additional

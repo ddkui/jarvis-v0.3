@@ -97,6 +97,7 @@ def build_agent(config: DelphiConfig, resume: bool = True):
         system_prompt=build_system_prompt(memory_facts),
         fallback_models=config.fallback_models,
         request_timeout_seconds=config.request_timeout_seconds,
+        ollama_num_ctx=config.ollama_num_ctx,
     )
     if resume:
         from delphi import conversation

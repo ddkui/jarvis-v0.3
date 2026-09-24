@@ -23,6 +23,14 @@ _IMAGE_DATA_URL_PREFIX = "data:image/"
 # stalled fallback model correctly moves on to the next one instead of
 # hanging the whole turn.
 _DEFAULT_REQUEST_TIMEOUT_SECONDS = 60
+# Ollama defaults every model to a 2048/4096-token context window regardless
+# of what the underlying model actually supports, unless told otherwise per
+# request - and Delphi's system prompt plus its full tool schema list alone
+# can easily be 10k+ tokens (more tools enabled, e.g. computer-use/code, make
+# this worse), so a fresh conversation can blow straight past the Ollama
+# default before the user has said anything. Only applies to "ollama/..."
+# models - other providers manage their own (much larger) context windows.
+_DEFAULT_OLLAMA_NUM_CTX = 8192
 
 # Transient/availability failures worth retrying with a fallback model rather
 # than surfacing immediately - e.g. a provider's rate limit or an outage.
@@ -69,12 +77,14 @@ class DelphiAgent:
         system_prompt: str = SYSTEM_PROMPT,
         fallback_models: list[str] | None = None,
         request_timeout_seconds: float = _DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        ollama_num_ctx: int | None = _DEFAULT_OLLAMA_NUM_CTX,
     ) -> None:
         self.model = model
         self.fallback_models = fallback_models or []
         self.system_prompt = system_prompt
         self._max_tool_iterations = max_tool_iterations
         self._request_timeout_seconds = request_timeout_seconds
+        self._ollama_num_ctx = ollama_num_ctx
         self._tool_schemas = [
             {
                 "type": "function",
@@ -130,12 +140,17 @@ class DelphiAgent:
         Tool-call argument fragments are concatenated by their stream
         `index`, matching how providers split large tool calls across many
         chunks."""
+        extra_params = {}
+        if self._ollama_num_ctx is not None and model.startswith("ollama/"):
+            extra_params["num_ctx"] = self._ollama_num_ctx
+
         stream = litellm.completion(
             model=model,
             messages=[{"role": "system", "content": self.system_prompt}] + self.messages,
             tools=self._tool_schemas or None,
             stream=True,
             timeout=self._request_timeout_seconds,
+            **extra_params,
         )
 
         content_parts: list[str] = []

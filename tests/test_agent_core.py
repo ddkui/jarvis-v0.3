@@ -340,6 +340,66 @@ def test_completion_call_uses_configured_timeout(monkeypatch):
     assert captured["timeout"] == 15
 
 
+def test_ollama_model_gets_num_ctx_by_default(monkeypatch):
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["num_ctx"] = kwargs.get("num_ctx")
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(model="ollama/llama3.1", tools=[])
+    agent.send("hi")
+
+    assert captured["num_ctx"] == 8192
+
+
+def test_ollama_num_ctx_is_configurable(monkeypatch):
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["num_ctx"] = kwargs.get("num_ctx")
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(model="ollama/llama3.1", tools=[], ollama_num_ctx=16384)
+    agent.send("hi")
+
+    assert captured["num_ctx"] == 16384
+
+
+def test_ollama_num_ctx_can_be_disabled(monkeypatch):
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["num_ctx_present"] = "num_ctx" in kwargs
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(model="ollama/llama3.1", tools=[], ollama_num_ctx=None)
+    agent.send("hi")
+
+    assert captured["num_ctx_present"] is False
+
+
+def test_non_ollama_models_never_get_num_ctx(monkeypatch):
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["num_ctx_present"] = "num_ctx" in kwargs
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[])
+    agent.send("hi")
+
+    assert captured["num_ctx_present"] is False
+
+
 def test_a_stalled_fallback_model_times_out_and_tries_the_next_one(monkeypatch):
     # This is the bug this test guards against: a fallback model that stalls
     # (no bytes at all, ever) rather than erroring cleanly used to hang the

@@ -58,3 +58,23 @@ def test_request_timeout_reads_env_var(monkeypatch):
 def test_request_timeout_falls_back_to_default_on_garbage(monkeypatch):
     monkeypatch.setenv("DELPHI_REQUEST_TIMEOUT", "not-a-number")
     assert load_config().request_timeout_seconds == 60.0
+
+
+def test_ollama_num_ctx_defaults_to_8192(monkeypatch):
+    monkeypatch.delenv("DELPHI_OLLAMA_NUM_CTX", raising=False)
+    assert load_config().ollama_num_ctx == 8192
+
+
+def test_ollama_num_ctx_reads_env_var(monkeypatch):
+    monkeypatch.setenv("DELPHI_OLLAMA_NUM_CTX", "16384")
+    assert load_config().ollama_num_ctx == 16384
+
+
+def test_ollama_num_ctx_zero_disables_it(monkeypatch):
+    monkeypatch.setenv("DELPHI_OLLAMA_NUM_CTX", "0")
+    assert load_config().ollama_num_ctx is None
+
+
+def test_ollama_num_ctx_falls_back_to_default_on_garbage(monkeypatch):
+    monkeypatch.setenv("DELPHI_OLLAMA_NUM_CTX", "not-a-number")
+    assert load_config().ollama_num_ctx == 8192
