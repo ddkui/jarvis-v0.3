@@ -300,6 +300,96 @@ def test_non_retryable_error_skips_fallbacks_entirely(monkeypatch):
     assert models_seen == ["gemini/gemini-2.5-flash"]
 
 
+def test_not_found_error_falls_back_to_next_model(monkeypatch):
+    # A specific model string being unavailable (typo, or retired) is
+    # per-entry, not systemic - unlike a bad key, it doesn't mean the *next*
+    # model in the list would fail the same way.
+    models_seen = []
+
+    def fake_completion(**kwargs):
+        models_seen.append(kwargs["model"])
+        if kwargs["model"] == "nvidia_nim/deepseek-ai/deepseek-v4-flash":
+            raise litellm.exceptions.NotFoundError(
+                "model not found", llm_provider="nvidia_nim", model=kwargs["model"]
+            )
+        return _text_stream("Answered by the next model.")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(
+        model="nvidia_nim/deepseek-ai/deepseek-v4-flash",
+        tools=[],
+        fallback_models=["nvidia_nim/meta/llama3-70b-instruct"],
+    )
+    result = agent.send("hi")
+
+    assert result == "Answered by the next model."
+    assert models_seen == [
+        "nvidia_nim/deepseek-ai/deepseek-v4-flash",
+        "nvidia_nim/meta/llama3-70b-instruct",
+    ]
+
+
+def test_generic_api_error_with_410_status_falls_back(monkeypatch):
+    # The real bug this guards against: litellm doesn't map every provider's
+    # every status code to a specific exception type - a retired model on
+    # NVIDIA NIM surfaced as a generic APIError carrying status_code=410
+    # rather than as NotFoundError, and used to abort the whole fallback
+    # chain instead of moving on to the next (working) entry.
+    models_seen = []
+
+    def fake_completion(**kwargs):
+        models_seen.append(kwargs["model"])
+        if kwargs["model"] == "nvidia_nim/deepseek-ai/deepseek-v4-flash":
+            raise litellm.exceptions.APIError(
+                status_code=410,
+                message="model has reached end of life",
+                llm_provider="nvidia_nim",
+                model=kwargs["model"],
+            )
+        return _text_stream("Answered by the next model.")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(
+        model="nvidia_nim/deepseek-ai/deepseek-v4-flash",
+        tools=[],
+        fallback_models=["nvidia_nim/meta/llama3-70b-instruct"],
+    )
+    result = agent.send("hi")
+
+    assert result == "Answered by the next model."
+    assert models_seen == [
+        "nvidia_nim/deepseek-ai/deepseek-v4-flash",
+        "nvidia_nim/meta/llama3-70b-instruct",
+    ]
+
+
+def test_generic_api_error_with_unretryable_status_propagates(monkeypatch):
+    models_seen = []
+
+    def fake_completion(**kwargs):
+        models_seen.append(kwargs["model"])
+        raise litellm.exceptions.APIError(
+            status_code=400,
+            message="malformed request",
+            llm_provider="nvidia_nim",
+            model=kwargs["model"],
+        )
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(
+        model="nvidia_nim/deepseek-ai/deepseek-v4-flash",
+        tools=[],
+        fallback_models=["nvidia_nim/meta/llama3-70b-instruct"],
+    )
+    with pytest.raises(litellm.exceptions.APIError):
+        agent.send("hi")
+
+    assert models_seen == ["nvidia_nim/deepseek-ai/deepseek-v4-flash"]
+
+
 def test_no_fallback_models_configured_behaves_as_before(monkeypatch):
     monkeypatch.setattr(
         "delphi.agent.core.litellm.completion",

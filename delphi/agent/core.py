@@ -34,12 +34,13 @@ _DEFAULT_OLLAMA_NUM_CTX = 8192
 
 # Transient/availability failures worth retrying with a fallback model rather
 # than surfacing immediately - e.g. a provider's rate limit or an outage.
-# Deliberately excludes AuthenticationError/NotFoundError/BadRequestError and
-# friends: those are configuration problems that would fail identically on
-# every model, so burning through the fallback list on them just delays the
-# same error. ServiceUnavailableError also covers MidStreamFallbackError
-# (litellm raises that as a subclass) - a stream that dies partway through
-# hits this same path.
+# ServiceUnavailableError also covers MidStreamFallbackError (litellm raises
+# that as a subclass) - a stream that dies partway through hits this path.
+# NotFoundError is here too - "this exact model string doesn't exist/isn't
+# available" (a typo, or a model that's been retired - hit live as a 410 Gone
+# for a model whose end-of-life date had passed) is inherently per-entry in
+# the fallback list, not something that would recur identically on a
+# *different* model the way a bad API key or a malformed request would.
 _RETRYABLE_ERRORS = (
     litellm.exceptions.RateLimitError,
     litellm.exceptions.APIConnectionError,
@@ -47,7 +48,28 @@ _RETRYABLE_ERRORS = (
     litellm.exceptions.Timeout,
     litellm.exceptions.InternalServerError,
     litellm.exceptions.BadGatewayError,
+    litellm.exceptions.NotFoundError,
 )
+# Deliberately excludes AuthenticationError/BadRequestError and friends:
+# those usually mean a request that's broken regardless of which model
+# receives it (missing/invalid key for that provider, malformed payload), so
+# burning through the whole fallback list on them just delays the same error
+# rather than recovering from it.
+
+# Statuses meaning "this specific model/endpoint is gone or doesn't exist"
+# rather than "the request itself is malformed" - worth treating the same as
+# NotFoundError above even when litellm couldn't map the response to that
+# specific exception type and fell back to its generic APIError instead (as
+# happened for a 410 Gone from a retired model).
+_RETRYABLE_GENERIC_API_ERROR_STATUS_CODES = {404, 410}
+
+
+def _is_retryable(e: Exception) -> bool:
+    if isinstance(e, _RETRYABLE_ERRORS):
+        return True
+    if isinstance(e, litellm.exceptions.APIError):
+        return getattr(e, "status_code", None) in _RETRYABLE_GENERIC_API_ERROR_STATUS_CODES
+    return False
 
 
 class DelphiAgent:
@@ -108,10 +130,12 @@ class DelphiAgent:
     def _stream_completion(self, on_delta: Callable[[str], None] | None):
         """Run one streamed completion call, trying self.model first and then
         each of self.fallback_models in order if a transient/availability
-        error hits (see _RETRYABLE_ERRORS) - e.g. the primary provider's rate
-        limit. A failure that isn't in that set (bad API key, invalid model,
-        etc.) propagates immediately without wasting time cycling through
-        fallbacks, since it would fail identically on every one of them.
+        error hits, or the model turns out to be unavailable/nonexistent (see
+        _is_retryable) - e.g. the primary provider's rate limit, or a
+        fallback entry that's been retired. A failure that isn't retryable
+        (bad API key, a malformed request) propagates immediately without
+        wasting time cycling through fallbacks, since it would fail
+        identically on every one of them.
 
         Any text already streamed via on_delta before a retryable failure
         stays on screen - the retry starts a fresh response after it rather
@@ -123,7 +147,9 @@ class DelphiAgent:
         for attempt, model in enumerate(models_to_try):
             try:
                 return self._stream_completion_with_model(model, on_delta)
-            except _RETRYABLE_ERRORS as e:
+            except Exception as e:
+                if not _is_retryable(e):
+                    raise
                 last_error = e
                 if attempt + 1 < len(models_to_try):
                     print(
