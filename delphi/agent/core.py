@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import Counter
 from types import SimpleNamespace
 from typing import Callable
 
@@ -12,6 +13,15 @@ from delphi.models import AgentAbort, Tool
 
 _MAX_TOOL_ITERATIONS = 8
 _IMAGE_DATA_URL_PREFIX = "data:image/"
+# How many times the exact same tool call (name + arguments, verbatim) can
+# repeat within one turn before it's treated as a stuck loop rather than
+# genuine progress - seen in practice with a weak local model calling
+# list_memory() with no arguments over twenty times in a row for a plain
+# "hey" that didn't need any tool call at all. Two repeats still get to run
+# (a model legitimately re-checking something isn't unheard of); the third
+# identical attempt stops the turn instead of grinding through the rest of
+# the iteration budget on calls that won't produce a different result.
+_MAX_IDENTICAL_TOOL_CALL_REPEATS = 2
 # No timeout on the completion call meant a provider that stalls instead of
 # erroring cleanly (no bytes at all, ever) just hung forever - especially
 # visible with a fallback model choking on something in the conversation
@@ -289,6 +299,7 @@ class DelphiAgent:
         becoming a tool error the model could act on again.
         """
         self.messages.append({"role": "user", "content": user_message})
+        call_repeat_counts: Counter[tuple[str, str]] = Counter()
 
         for _ in range(self._max_tool_iterations):
             message = self._stream_completion(on_delta)
@@ -311,6 +322,24 @@ class DelphiAgent:
 
             if not tool_calls:
                 return message.content or ""
+
+            for call in tool_calls:
+                call_repeat_counts[(call.function.name, call.function.arguments)] += 1
+            if any(count > _MAX_IDENTICAL_TOOL_CALL_REPEATS for count in call_repeat_counts.values()):
+                for call in tool_calls:
+                    self.messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            "content": "Not executed: this exact call has already repeated "
+                            "several times without making progress.",
+                        }
+                    )
+                return (
+                    f"I called {tool_calls[0].function.name} with the same arguments several "
+                    "times without getting anywhere new, so I stopped rather than keep looping. "
+                    "Try rephrasing, or ask me something narrower."
+                )
 
             image_urls = []
             for i, call in enumerate(tool_calls):

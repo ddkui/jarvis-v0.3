@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import litellm
 import pytest
 
-from delphi.agent.core import DelphiAgent, _parse_text_as_tool_call
+from delphi.agent.core import _MAX_TOOL_ITERATIONS, DelphiAgent, _parse_text_as_tool_call
 from delphi.models import AgentAbort, Tool
 
 
@@ -196,16 +196,59 @@ def test_send_records_error_as_tool_result_without_raising(monkeypatch):
     assert "kaboom" in tool_result["content"]
 
 
-def test_send_stops_after_max_iterations(monkeypatch):
-    monkeypatch.setattr(
-        "delphi.agent.core.litellm.completion",
-        lambda **kwargs: _tool_call_stream("call_x", "loopy", {}),
-    )
+def test_send_stops_early_when_the_same_call_repeats(monkeypatch):
+    # Regression: a weak local model called list_memory() with identical
+    # (empty) arguments over twenty times in a row for a plain "hey" that
+    # didn't need any tool call at all - this now gets caught after a
+    # couple of repeats instead of grinding through the whole iteration
+    # budget on calls that were never going to produce a new result.
+    calls_made = []
+
+    def fake_completion(**kwargs):
+        calls_made.append(1)
+        return _tool_call_stream("call_x", "loopy", {})
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
 
     loopy_tool = Tool(
         name="loopy",
         description="Never resolves.",
         input_schema={"type": "object", "properties": {}},
+        handler=lambda args: "still going",
+    )
+    agent = DelphiAgent(model="groq/llama-3.3-70b-versatile", tools=[loopy_tool])
+
+    result = agent.send("loop forever")
+
+    assert "same arguments several times" in result
+    assert len(calls_made) < _MAX_TOOL_ITERATIONS
+    # The first _MAX_IDENTICAL_TOOL_CALL_REPEATS attempts still actually ran
+    # (a model re-checking something isn't automatically a loop) - only the
+    # one that tipped over the threshold gets skipped.
+    tool_result_messages = [m for m in agent.messages if m.get("role") == "tool"]
+    assert [m["content"] for m in tool_result_messages] == [
+        "still going",
+        "still going",
+        "Not executed: this exact call has already repeated several times without making progress.",
+    ]
+
+
+def test_send_still_stops_after_max_iterations_when_calls_keep_varying(monkeypatch):
+    # The repeat-detector only catches an *identical* call recurring - if a
+    # model keeps calling different tools/arguments each time without ever
+    # converging (never repeating exactly), the iteration-count ceiling is
+    # still the backstop.
+    counter = iter(range(1000))
+
+    def fake_completion(**kwargs):
+        return _tool_call_stream("call_x", "loopy", {"n": next(counter)})
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    loopy_tool = Tool(
+        name="loopy",
+        description="Never resolves.",
+        input_schema={"type": "object", "properties": {"n": {"type": "integer"}}},
         handler=lambda args: "still going",
     )
     agent = DelphiAgent(model="groq/llama-3.3-70b-versatile", tools=[loopy_tool])
