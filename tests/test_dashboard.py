@@ -324,6 +324,26 @@ def test_chat_send_handles_authentication_error(client, monkeypatch):
     assert "authenticate" in data["error"].lower()
 
 
+def test_chat_send_error_names_the_failing_model_not_the_primary(client, monkeypatch):
+    # With DELPHI_FALLBACK_MODELS configured, an error can come from a
+    # fallback model rather than config.model - the reported name should
+    # reflect whichever one actually failed, not always blame the primary.
+    c, _ = client
+    fake_agent = _FakeAgent(
+        raises=litellm.exceptions.NotFoundError(
+            "model not found", llm_provider="nvidia_nim", model="nvidia_nim/meta/llama3-70b-instruct"
+        )
+    )
+    monkeypatch.setattr(runtime, "build_agent", lambda config: fake_agent)
+
+    res = c.post("/chat/send", data={"message": "hi"})
+
+    data = res.get_json()
+    assert data["ok"] is False
+    assert "nvidia_nim/meta/llama3-70b-instruct" in data["error"]
+    assert "anthropic/claude-opus-5" not in data["error"]
+
+
 def test_chat_send_handles_unexpected_errors_gracefully(client, monkeypatch):
     c, _ = client
     fake_agent = _FakeAgent(raises=RuntimeError("quota exceeded"))

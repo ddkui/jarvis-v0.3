@@ -28,6 +28,15 @@ def _summarize(e: Exception) -> str:
     return str(e).splitlines()[0]
 
 
+def _failing_model(e: Exception, config_model: str) -> str:
+    # With DELPHI_FALLBACK_MODELS configured, the model that actually raised
+    # this error may not be the primary one - litellm's own exceptions carry
+    # the real model string on `.model`, so use that instead of always
+    # blaming config.model (misleading: "couldn't reach 'ollama/...'" for a
+    # failure that actually happened on a completely different fallback).
+    return getattr(e, "model", None) or config_model
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="delphi", description="Your personal second brain.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -227,17 +236,18 @@ def cmd_chat(args: argparse.Namespace) -> int:
         console.print(f"\n[bold red]Stopped:[/bold red] {e}")
         return 1
     except (litellm.exceptions.AuthenticationError, litellm.exceptions.APIConnectionError) as e:
+        failing_model = _failing_model(e, config.model)
         console.print(
             f"[bold red]Delphi couldn't authenticate[/bold red] with the API for model "
-            f"'{escape(config.model)}': {escape(_summarize(e))}\n"
+            f"'{escape(failing_model)}': {escape(_summarize(e))}\n"
             "If you haven't set an API key for this provider yet, run "
-            f"[cyan]delphi auth set {_key_env_var_hint(config.model)}[/cyan] or copy "
+            f"[cyan]delphi auth set {_key_env_var_hint(failing_model)}[/cyan] or copy "
             ".env.example to .env — otherwise this may be a network issue reaching the provider."
         )
         return 1
     except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
         console.print(
-            f"[bold red]Delphi couldn't reach model[/bold red] '{escape(config.model)}': "
+            f"[bold red]Delphi couldn't reach model[/bold red] '{escape(_failing_model(e, config.model))}': "
             f"{escape(_summarize(e))}\n"
             "Check DELPHI_MODEL uses a valid litellm provider prefix, e.g. "
             "anthropic/claude-opus-5, gemini/gemini-2.5-flash, deepseek/deepseek-chat, "

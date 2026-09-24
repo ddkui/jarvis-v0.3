@@ -1,3 +1,5 @@
+import litellm
+
 from delphi.cli import (
     _run_turn,
     _summarize,
@@ -441,6 +443,42 @@ def test_cmd_chat_survives_a_transient_model_error_and_keeps_chatting(monkeypatc
     out = capsys.readouterr().out
     assert "hit a problem" in out
     assert "all good now" in out
+
+
+def test_cmd_chat_names_the_failing_fallback_model_not_the_primary(monkeypatch, tmp_path, capsys):
+    # With DELPHI_FALLBACK_MODELS configured, an unrecoverable error (e.g. an
+    # invalid model string) can come from a fallback rather than the primary
+    # model - the reported name should reflect whichever one actually
+    # failed, not always blame config.model.
+    from delphi.config import DelphiConfig
+
+    config = DelphiConfig(
+        model="anthropic/claude-opus-5",
+        vault_dir=tmp_path,
+        db_path=tmp_path / ".delphi" / "memory.db",
+        reminders_db_path=tmp_path / ".delphi" / "reminders.db",
+    )
+    monkeypatch.setattr("delphi.cli.load_config", lambda: config)
+    monkeypatch.setattr("delphi.autoupdate.check_and_pull", lambda: False)
+
+    class _FailingAgent:
+        def __init__(self):
+            self.messages = []
+
+        def send(self, message, on_delta=None, on_tool_call=None):
+            raise litellm.exceptions.NotFoundError(
+                "model not found", llm_provider="nvidia_nim", model="nvidia_nim/meta/llama3-70b-instruct"
+            )
+
+    monkeypatch.setattr("delphi.runtime.build_agent", lambda config: _FailingAgent())
+    monkeypatch.setattr(console, "input", lambda *a, **k: "hey")
+
+    result = cmd_chat(build_parser().parse_args(["chat"]))
+
+    assert result == 1
+    out = capsys.readouterr().out
+    assert "couldn't reach model 'nvidia_nim/meta/llama3-70b-instruct'" in out.lower()
+    assert "couldn't reach model 'anthropic/claude-opus-5'" not in out.lower()
 
 
 def test_run_turn_passes_vault_dir_to_speak(monkeypatch, tmp_path):

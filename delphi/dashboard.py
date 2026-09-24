@@ -25,6 +25,13 @@ def _summarize(e: Exception) -> str:
     return str(e).splitlines()[0]
 
 
+def _failing_model(e: Exception, config_model: str) -> str:
+    # With DELPHI_FALLBACK_MODELS configured, the model that actually raised
+    # this error may not be the primary one - use litellm's own `.model` on
+    # the exception instead of always blaming config.model.
+    return getattr(e, "model", None) or config_model
+
+
 def _delete_best_effort(path: Path) -> None:
     # On Windows, a file the WSGI server is still streaming out (e.g. via
     # send_file) can still be open when this runs, and deleting an open file
@@ -182,13 +189,17 @@ def create_app(config: DelphiConfig) -> Flask:
             return jsonify(
                 {
                     "ok": False,
-                    "error": f"Couldn't authenticate with the API for model '{config.model}': {_summarize(e)}. "
+                    "error": f"Couldn't authenticate with the API for model "
+                    f"'{_failing_model(e, config.model)}': {_summarize(e)}. "
                     "Run `delphi auth set <KEY>` or check .env.",
                 }
             ), 200
         except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
             return jsonify(
-                {"ok": False, "error": f"Couldn't reach model '{config.model}': {_summarize(e)}"}
+                {
+                    "ok": False,
+                    "error": f"Couldn't reach model '{_failing_model(e, config.model)}': {_summarize(e)}",
+                }
             ), 200
         except Exception as e:
             return jsonify({"ok": False, "error": f"That turn hit a problem: {_summarize(e)}"}), 200
