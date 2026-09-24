@@ -481,6 +481,44 @@ def test_cmd_chat_names_the_failing_fallback_model_not_the_primary(monkeypatch, 
     assert "couldn't reach model 'anthropic/claude-opus-5'" not in out.lower()
 
 
+def test_cmd_chat_suggests_new_conversation_for_multimodal_errors(monkeypatch, tmp_path, capsys):
+    # Regression: switching to a text-only local model while a resumed
+    # conversation still has an old computer-use screenshot in it fails
+    # every turn - the generic "check DELPHI_MODEL" hint is actively wrong
+    # here (the model string is fine), so this case gets its own message.
+    from delphi.config import DelphiConfig
+
+    config = DelphiConfig(
+        model="ollama/qwen2.5-coder:7b",
+        vault_dir=tmp_path,
+        db_path=tmp_path / ".delphi" / "memory.db",
+        reminders_db_path=tmp_path / ".delphi" / "reminders.db",
+    )
+    monkeypatch.setattr("delphi.cli.load_config", lambda: config)
+    monkeypatch.setattr("delphi.autoupdate.check_and_pull", lambda: False)
+
+    class _FailingAgent:
+        def __init__(self):
+            self.messages = []
+
+        def send(self, message, on_delta=None, on_tool_call=None):
+            raise litellm.exceptions.BadRequestError(
+                "Multimodal data provided, but model does not support multimodal requests.",
+                llm_provider="ollama",
+                model="ollama/qwen2.5-coder:7b",
+            )
+
+    monkeypatch.setattr("delphi.runtime.build_agent", lambda config: _FailingAgent())
+    monkeypatch.setattr(console, "input", lambda *a, **k: "hey")
+
+    result = cmd_chat(build_parser().parse_args(["chat"]))
+
+    assert result == 1
+    out = capsys.readouterr().out
+    assert "--new" in out
+    assert "check delphi_model uses a valid" not in out.lower()
+
+
 def test_run_turn_passes_vault_dir_to_speak(monkeypatch, tmp_path):
     # Regression: _run_turn called tts.speak(response) with no vault_dir, but
     # tts.speak(text, vault_dir) requires it - --speak crashed on every single

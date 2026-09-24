@@ -246,13 +246,27 @@ def cmd_chat(args: argparse.Namespace) -> int:
         )
         return 1
     except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
-        console.print(
-            f"[bold red]Delphi couldn't reach model[/bold red] '{escape(_failing_model(e, config.model))}': "
-            f"{escape(_summarize(e))}\n"
-            "Check DELPHI_MODEL uses a valid litellm provider prefix, e.g. "
-            "anthropic/claude-opus-5, gemini/gemini-2.5-flash, deepseek/deepseek-chat, "
-            "groq/llama-3.3-70b-versatile, ollama/llama3.1."
-        )
+        summary = _summarize(e)
+        if "multimodal" in summary.lower():
+            # Not a bad DELPHI_MODEL string - the resumed conversation still
+            # has an image in it (e.g. a computer-use screenshot from an
+            # earlier turn) and the current model doesn't accept vision
+            # input at all, so every turn fails until the history's cleared.
+            console.print(
+                f"[bold red]Delphi couldn't reach model[/bold red] "
+                f"'{escape(_failing_model(e, config.model))}': {escape(summary)}\n"
+                "This model doesn't support images, but your resumed conversation still has "
+                "one in it (e.g. a computer-use screenshot from an earlier turn) - run "
+                "[cyan]delphi chat --new[/cyan] to start fresh without it."
+            )
+        else:
+            console.print(
+                f"[bold red]Delphi couldn't reach model[/bold red] '{escape(_failing_model(e, config.model))}': "
+                f"{escape(summary)}\n"
+                "Check DELPHI_MODEL uses a valid litellm provider prefix, e.g. "
+                "anthropic/claude-opus-5, gemini/gemini-2.5-flash, deepseek/deepseek-chat, "
+                "groq/llama-3.3-70b-versatile, ollama/llama3.1."
+            )
         return 1
 
     return 0

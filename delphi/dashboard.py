@@ -195,10 +195,19 @@ def create_app(config: DelphiConfig) -> Flask:
                 }
             ), 200
         except (litellm.exceptions.NotFoundError, litellm.exceptions.BadRequestError) as e:
+            summary = _summarize(e)
+            hint = (
+                # Not a bad DELPHI_MODEL string - the resumed conversation
+                # still has an image in it (e.g. a computer-use screenshot)
+                # and the current model doesn't accept vision input at all.
+                ' Click "New conversation" to start fresh without the image in your history.'
+                if "multimodal" in summary.lower()
+                else ""
+            )
             return jsonify(
                 {
                     "ok": False,
-                    "error": f"Couldn't reach model '{_failing_model(e, config.model)}': {_summarize(e)}",
+                    "error": f"Couldn't reach model '{_failing_model(e, config.model)}': {summary}{hint}",
                 }
             ), 200
         except Exception as e:

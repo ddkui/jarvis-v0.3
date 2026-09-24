@@ -344,6 +344,24 @@ def test_chat_send_error_names_the_failing_model_not_the_primary(client, monkeyp
     assert "anthropic/claude-opus-5" not in data["error"]
 
 
+def test_chat_send_suggests_new_conversation_for_multimodal_errors(client, monkeypatch):
+    c, _ = client
+    fake_agent = _FakeAgent(
+        raises=litellm.exceptions.BadRequestError(
+            "Multimodal data provided, but model does not support multimodal requests.",
+            llm_provider="ollama",
+            model="ollama/qwen2.5-coder:7b",
+        )
+    )
+    monkeypatch.setattr(runtime, "build_agent", lambda config: fake_agent)
+
+    res = c.post("/chat/send", data={"message": "hi"})
+
+    data = res.get_json()
+    assert data["ok"] is False
+    assert "new conversation" in data["error"].lower()
+
+
 def test_chat_send_handles_unexpected_errors_gracefully(client, monkeypatch):
     c, _ = client
     fake_agent = _FakeAgent(raises=RuntimeError("quota exceeded"))
