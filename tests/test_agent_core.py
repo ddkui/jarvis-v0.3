@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import litellm
 import pytest
 
-from delphi.agent.core import DelphiAgent
+from delphi.agent.core import DelphiAgent, _parse_text_as_tool_call
 from delphi.models import AgentAbort, Tool
 
 
@@ -60,6 +60,79 @@ def test_send_streams_text_via_on_delta(monkeypatch):
 
     assert "".join(received) == "Hello there."
     assert result == "Hello there."
+
+
+class TestParseTextAsToolCall:
+    def test_matches_a_known_tool_name(self):
+        result = _parse_text_as_tool_call(
+            '{"name": "remember", "arguments": {"text": "Dan likes pizza"}}', {"remember"}
+        )
+        assert result == {"name": "remember", "arguments": {"text": "Dan likes pizza"}}
+
+    def test_missing_arguments_key_defaults_to_empty_dict(self):
+        result = _parse_text_as_tool_call('{"name": "remember"}', {"remember"})
+        assert result == {"name": "remember", "arguments": {}}
+
+    def test_strips_a_markdown_json_code_fence(self):
+        result = _parse_text_as_tool_call(
+            '```json\n{"name": "remember", "arguments": {"text": "hi"}}\n```', {"remember"}
+        )
+        assert result == {"name": "remember", "arguments": {"text": "hi"}}
+
+    def test_unknown_tool_name_is_not_treated_as_a_tool_call(self):
+        assert _parse_text_as_tool_call('{"name": "delete_everything", "arguments": {}}', {"remember"}) is None
+
+    def test_ordinary_prose_is_not_a_tool_call(self):
+        assert _parse_text_as_tool_call("Sure, I can help with that!", {"remember"}) is None
+
+    def test_prose_that_merely_mentions_json_is_not_a_tool_call(self):
+        text = 'Here is an example: {"name": "remember", "arguments": {}} - hope that helps!'
+        assert _parse_text_as_tool_call(text, {"remember"}) is None
+
+    def test_malformed_json_is_not_a_tool_call(self):
+        assert _parse_text_as_tool_call('{"name": "remember", "arguments":', {"remember"}) is None
+
+    def test_a_json_array_is_not_a_tool_call(self):
+        assert _parse_text_as_tool_call('["remember"]', {"remember"}) is None
+
+    def test_non_dict_arguments_is_not_a_tool_call(self):
+        assert _parse_text_as_tool_call('{"name": "remember", "arguments": "oops"}', {"remember"}) is None
+
+
+def test_send_executes_a_tool_call_disguised_as_plain_json_text(monkeypatch):
+    # Some Ollama models (a GGUF import without a proper tool-calling chat
+    # template) print a tool call as bare JSON text instead of using the
+    # API's structured tool_calls field - without handling this, the tool
+    # never runs and the raw JSON just gets shown as the reply.
+    calls = iter(
+        [
+            _text_stream('{"name": "echo", "arguments": {"text": "ping"}}'),
+            _text_stream("Done: pong"),
+        ]
+    )
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", lambda **kwargs: next(calls))
+
+    echo_tool = Tool(
+        name="echo",
+        description="Echoes text back reversed.",
+        input_schema={"type": "object", "properties": {"text": {"type": "string"}}},
+        handler=lambda args: "pong" if args["text"] == "ping" else "unexpected",
+    )
+    agent = DelphiAgent(model="ollama/some-model", tools=[echo_tool])
+
+    tool_calls_seen = []
+    result = agent.send("say ping", on_tool_call=tool_calls_seen.append)
+
+    assert result == "Done: pong"
+    assert tool_calls_seen == ["echo"]
+    tool_result_messages = [m for m in agent.messages if m.get("role") == "tool"]
+    assert tool_result_messages == [
+        {"role": "tool", "tool_call_id": "fallback_call_0", "content": "pong"}
+    ]
+    # The raw JSON shouldn't linger in history as the assistant's own text -
+    # it'd just reinforce the bad habit on the next turn.
+    assistant_messages = [m for m in agent.messages if m.get("role") == "assistant"]
+    assert assistant_messages[0]["content"] == ""
 
 
 def test_send_executes_tool_then_returns_final_text(monkeypatch):

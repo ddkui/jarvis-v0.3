@@ -72,6 +72,42 @@ def _is_retryable(e: Exception) -> bool:
     return False
 
 
+def _parse_text_as_tool_call(content: str, known_tool_names: set[str]) -> dict | None:
+    """Some models - seen in practice with an Ollama model whose GGUF import
+    didn't carry a proper tool-calling chat template - don't use the API's
+    structured tool_calls field at all; instead they print a plain-text
+    guess at what a tool call "looks like" as their entire response, e.g.
+    `{"name": "remember", "arguments": {"text": "..."}}`. Without this, that
+    JSON just gets shown to the user as the reply and the tool never runs.
+
+    Deliberately narrow to avoid false positives on a model that legitimately
+    wants to show the user some JSON: the *entire* response (after stripping
+    a markdown code fence, which models often wrap JSON in) must parse as a
+    single object with a "name" that matches an *actual* registered tool -
+    not just anything shaped like `{"name": ..., "arguments": ...}`."""
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    if not (text.startswith("{") and text.endswith("}")):
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    name = data.get("name")
+    if not isinstance(name, str) or name not in known_tool_names:
+        return None
+    arguments = data.get("arguments", {})
+    if not isinstance(arguments, dict):
+        return None
+    return {"name": name, "arguments": arguments}
+
+
 class DelphiAgent:
     """Wraps litellm's unified completion API with a manual agentic tool-use loop.
 
@@ -204,7 +240,28 @@ class DelphiAgent:
             )
             for _, slot in sorted(tool_call_slots.items())
         ]
-        return SimpleNamespace(content="".join(content_parts) or None, tool_calls=tool_calls or None)
+        content = "".join(content_parts) or None
+
+        if not tool_calls and content:
+            known_tool_names = {schema["function"]["name"] for schema in self._tool_schemas}
+            fallback = _parse_text_as_tool_call(content, known_tool_names)
+            if fallback is not None:
+                # The raw JSON was already shown live via on_delta above (we
+                # only know it was a disguised tool call once the full text
+                # has arrived) - clearing content here just keeps it out of
+                # the conversation history that gets sent back to the model,
+                # so it isn't reinforced as something to keep doing.
+                content = None
+                tool_calls = [
+                    SimpleNamespace(
+                        id="fallback_call_0",
+                        function=SimpleNamespace(
+                            name=fallback["name"], arguments=json.dumps(fallback["arguments"])
+                        ),
+                    )
+                ]
+
+        return SimpleNamespace(content=content, tool_calls=tool_calls or None)
 
     def send(
         self,
