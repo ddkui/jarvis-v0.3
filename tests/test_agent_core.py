@@ -563,6 +563,63 @@ def test_non_ollama_models_never_get_num_ctx(monkeypatch):
     assert captured["num_ctx_present"] is False
 
 
+def test_ollama_models_get_the_tool_call_format_hint_when_tools_are_available(monkeypatch):
+    from delphi.agent.prompts import OLLAMA_TOOL_CALL_FORMAT_HINT
+
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["system_content"] = kwargs["messages"][0]["content"]
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    echo_tool = Tool(
+        name="echo", description="x", input_schema={"type": "object", "properties": {}}, handler=lambda a: "x"
+    )
+    agent = DelphiAgent(model="ollama/llama3.1", tools=[echo_tool])
+    agent.send("hi")
+
+    assert OLLAMA_TOOL_CALL_FORMAT_HINT in captured["system_content"]
+
+
+def test_ollama_models_skip_the_hint_when_there_are_no_tools(monkeypatch):
+    from delphi.agent.prompts import OLLAMA_TOOL_CALL_FORMAT_HINT
+
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["system_content"] = kwargs["messages"][0]["content"]
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    agent = DelphiAgent(model="ollama/llama3.1", tools=[])
+    agent.send("hi")
+
+    assert OLLAMA_TOOL_CALL_FORMAT_HINT not in captured["system_content"]
+
+
+def test_non_ollama_models_never_get_the_tool_call_format_hint(monkeypatch):
+    from delphi.agent.prompts import OLLAMA_TOOL_CALL_FORMAT_HINT
+
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured["system_content"] = kwargs["messages"][0]["content"]
+        return _text_stream("hi")
+
+    monkeypatch.setattr("delphi.agent.core.litellm.completion", fake_completion)
+
+    echo_tool = Tool(
+        name="echo", description="x", input_schema={"type": "object", "properties": {}}, handler=lambda a: "x"
+    )
+    agent = DelphiAgent(model="anthropic/claude-opus-5", tools=[echo_tool])
+    agent.send("hi")
+
+    assert OLLAMA_TOOL_CALL_FORMAT_HINT not in captured["system_content"]
+
+
 def test_a_stalled_fallback_model_times_out_and_tries_the_next_one(monkeypatch):
     # This is the bug this test guards against: a fallback model that stalls
     # (no bytes at all, ever) rather than erroring cleanly used to hang the

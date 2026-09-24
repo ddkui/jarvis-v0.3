@@ -7,7 +7,7 @@ from typing import Callable
 
 import litellm
 
-from delphi.agent.prompts import SYSTEM_PROMPT
+from delphi.agent.prompts import OLLAMA_TOOL_CALL_FORMAT_HINT, SYSTEM_PROMPT
 from delphi.models import AgentAbort, Tool
 
 _MAX_TOOL_ITERATIONS = 8
@@ -206,9 +206,13 @@ class DelphiAgent:
         if self._ollama_num_ctx is not None and model.startswith("ollama/"):
             extra_params["num_ctx"] = self._ollama_num_ctx
 
+        system_content = self.system_prompt
+        if self._tool_schemas and model.startswith("ollama/"):
+            system_content += OLLAMA_TOOL_CALL_FORMAT_HINT
+
         stream = litellm.completion(
             model=model,
-            messages=[{"role": "system", "content": self.system_prompt}] + self.messages,
+            messages=[{"role": "system", "content": system_content}] + self.messages,
             tools=self._tool_schemas or None,
             stream=True,
             timeout=self._request_timeout_seconds,

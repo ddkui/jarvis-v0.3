@@ -49,6 +49,29 @@ If they say no, or ask for changes, use discard_pending_changes or keep editing 
 """
 
 
+# Appended only for ollama/... models when tools are available (see
+# delphi/agent/core.py) - a model whose GGUF import lacks a proper
+# tool-calling chat template won't reliably use the API's structured
+# tool_calls field at all, and left to guess at a text format it tends to
+# invent a wrong one (seen in practice: wrapping the real tool name inside
+# a generic {"name": "function", "arguments": {"argument_name": ...,
+# "argument_value": ...}} shape that matches no real tool). A concrete
+# example of the exact expected shape is a stronger, more specific nudge
+# than the tool schema alone. Harmless extra tokens for a model that
+# ignores it because it already has real function-calling support, so this
+# isn't worth sending to every provider - only Ollama has shown this
+# failure mode so far.
+OLLAMA_TOOL_CALL_FORMAT_HINT = """
+If you can't use your API's built-in function-calling mechanism for a tool call, respond with \
+*only* a single JSON object in exactly this shape, nothing else - no other text, no markdown code \
+fence, no wrapping key:
+{"name": "<the tool's real name>", "arguments": {"<the tool's real argument name>": <value>}}
+Use the tool's actual name directly as "name" - never a generic placeholder like "function" or \
+"tool". Put the tool's actual argument names directly as keys inside "arguments" - never a \
+generic {"argument_name": ..., "argument_value": ...} pair.
+"""
+
+
 def build_system_prompt(memory_facts: list[str]) -> str:
     """Append what's currently remembered about the user, if anything, so it's
     part of every turn's context automatically rather than something the model
